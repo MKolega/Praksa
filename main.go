@@ -34,11 +34,14 @@ type Ponude []struct {
 	ImaStatistiku bool   `json:"ima_statistiku,omitempty"`
 }
 
-func main() {
+func fetchData() (Lige, Ponude) {
 	urls := []string{
 		"https://minus5-dev-test.s3.eu-central-1.amazonaws.com/lige.json",
 		"https://minus5-dev-test.s3.eu-central-1.amazonaws.com/ponude.json",
 	}
+	var lige Lige
+	var ponude Ponude
+
 	for _, url := range urls {
 		resp, err := http.Get(url)
 		if err != nil {
@@ -48,7 +51,7 @@ func main() {
 
 		if resp.StatusCode == http.StatusOK {
 			if url == "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/lige.json" {
-				var lige Lige
+
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
 					log.Fatal(err)
@@ -59,7 +62,6 @@ func main() {
 				fmt.Printf("Lige: %v\n", lige)
 
 			} else if url == "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/ponude.json" {
-				var ponude Ponude
 				body, err := io.ReadAll(resp.Body)
 				if err != nil {
 					log.Fatal(err)
@@ -75,5 +77,39 @@ func main() {
 		} else {
 			log.Fatalf("failed to fetch data: %s", resp.Status)
 		}
+
 	}
+	return lige, ponude
+}
+
+func ligeRequest(lige Lige) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for _, liga := range lige.Lige {
+			fmt.Fprintf(w, "Liga: %s\n", liga.Naziv)
+			for _, razrada := range liga.Razrade {
+				for _, ponuda := range razrada.Ponude {
+					fmt.Fprintf(w, "Ponuda: %d\n", ponuda)
+				}
+			}
+		}
+	}
+}
+
+func ponudeRequest(ponude Ponude) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		for _, ponuda := range ponude {
+			if fmt.Sprintf("/api/ponude/%d", ponuda.ID) == r.URL.Path {
+				fmt.Fprintf(w, "Ponuda: %s\n", ponuda.Naziv)
+			}
+
+		}
+	}
+}
+
+func main() {
+	lige, ponude := fetchData()
+	http.HandleFunc("/api/lige", ligeRequest(lige))
+	http.HandleFunc("/api/ponude/", ponudeRequest(ponude))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
