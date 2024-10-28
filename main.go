@@ -107,9 +107,54 @@ func ponudeRequest(ponude Ponude) http.HandlerFunc {
 	}
 }
 
+func addRequest(ponude Ponude, lige Lige) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/api/ponude/add" {
+			var newPonuda struct {
+				Broj     string    `json:"broj"`
+				ID       int       `json:"id"`
+				Naziv    string    `json:"naziv"`
+				Vrijeme  time.Time `json:"vrijeme"`
+				Tecajevi []struct {
+					Tecaj float64 `json:"tecaj"`
+					Naziv string  `json:"naziv"`
+				} `json:"tecajevi"`
+				TvKanal       string `json:"tv_kanal,omitempty"`
+				ImaStatistiku bool   `json:"ima_statistiku,omitempty"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&newPonuda); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			ponude = append(ponude, newPonuda)
+			w.WriteHeader(http.StatusCreated)
+		} else if r.Method == "POST" && r.URL.Path == "/api/lige/add" {
+			var newLiga struct {
+				Naziv   string `json:"naziv"`
+				Razrade []struct {
+					Tipovi []struct {
+						Naziv string `json:"naziv"`
+					} `json:"tipovi"`
+					Ponude []int `json:"ponude"`
+				} `json:"razrade"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&newLiga); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			lige.Lige = append(lige.Lige, newLiga)
+			w.WriteHeader(http.StatusCreated)
+		} else {
+			http.Error(w, "Invalid request method or path", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
 func main() {
 	lige, ponude := fetchData()
 	http.HandleFunc("/api/lige", ligeRequest(lige))
 	http.HandleFunc("/api/ponude/", ponudeRequest(ponude))
+	http.HandleFunc("/api/ponude/add", addRequest(ponude, lige))
+	http.HandleFunc("/api/lige/add", addRequest(ponude, lige))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
