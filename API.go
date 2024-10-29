@@ -30,6 +30,8 @@ func (s *APIServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.ligeRequest))
 	router.HandleFunc("/api/players", makeHTTPHandlefunc(s.handlePlayer))
+	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
+	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handleCreatePonuda)).Methods("POST")
 	router.HandleFunc("/api/ponude/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPonuda))
 	log.Println("JSON API Server is running on port: ", s.listenAddr)
 
@@ -71,6 +73,7 @@ func (s *APIServer) handlePlayer(w http.ResponseWriter, r *http.Request) error {
 	}
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
+
 func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) error {
 	createPlayerReq := new(CreatePlayerRequest)
 	if err := json.NewDecoder(r.Body).Decode(createPlayerReq); err != nil {
@@ -93,6 +96,18 @@ func (s *APIServer) handleGetPlayers(w http.ResponseWriter, r *http.Request) err
 
 }
 
+func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) error {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		return fmt.Errorf("invalid player id: %s", vars["id"])
+	}
+	player, err := s.store.GetPlayerByID(id)
+	if err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, player)
+}
 func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) error {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
@@ -104,4 +119,16 @@ func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) erro
 		return err
 	}
 	return WriteJSON(w, http.StatusOK, ponuda)
+}
+
+func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) error {
+	createPonudaReq := new(CreatePonudaRequest)
+	if err := json.NewDecoder(r.Body).Decode(createPonudaReq); err != nil {
+		return err
+	}
+	ponuda := NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme)
+	if err := s.store.CreatePonuda(ponuda); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusCreated, ponuda)
 }

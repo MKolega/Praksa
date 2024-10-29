@@ -12,6 +12,7 @@ type Storage interface {
 	GetLige() ([]*Lige, error)
 	CreatePlayer(*Player) error
 	GetPlayers() ([]*Player, error)
+	GetPlayerByID(id int) (*Player, error)
 }
 
 type PostGresStore struct {
@@ -38,7 +39,8 @@ func (s *PostGresStore) Init() error {
 func (s *PostGresStore) createPlayerTable() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS Player (
-			username VARCHAR(255) PRIMARY KEY,
+		    id SERIAL PRIMARY KEY,	
+			username VARCHAR(255) NOT NULL,
 			password VARCHAR(255) NOT NULL,
 			account_balance DECIMAL(10, 2) NOT NULL
 		)
@@ -85,15 +87,27 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 }
 
 func (s *PostGresStore) CreatePonuda(ponude *Ponude) error {
-	//TODO implement me
-	panic("implement me")
+	query := "INSERT INTO ponude (broj,id ,naziv,tv_kanal,vrijeme,ima_statistiku) VALUES ($1, $2, $3, $4, $5, $6)"
+	resp, err := s.db.Query(query,
+		ponude.Broj,
+		ponude.ID,
+		ponude.Naziv,
+		ponude.TvKanal,
+		ponude.Vrijeme,
+		ponude.ImaStatistiku,
+	)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%+v\n", resp)
+	return nil
 }
 
 func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
-	rows, err := s.db.Query(`SELECT id,broj,naziv FROM ponude WHERE id = $1`, id)
+	rows, err := s.db.Query(`SELECT id, broj, naziv, vrijeme, tv_kanal, ima_statistiku FROM ponude WHERE id = $1`, id)
 	if err != nil {
 		return nil, err
-
 	}
 	ponuda := new(Ponude)
 	for rows.Next() {
@@ -101,13 +115,19 @@ func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
 			&ponuda.ID,
 			&ponuda.Broj,
 			&ponuda.Naziv,
+			&ponuda.Vrijeme,
+			&ponuda.TvKanal,
+			&ponuda.ImaStatistiku,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+	}
+	if ponuda.ID == 0 {
+		return nil, fmt.Errorf("ponuda with id %d not found", id)
 	}
 	return ponuda, nil
-
 }
 
 func (s *PostGresStore) GetPlayers() ([]*Player, error) {
@@ -119,11 +139,7 @@ func (s *PostGresStore) GetPlayers() ([]*Player, error) {
 	}
 	players := []*Player{}
 	for rows.Next() {
-		player := new(Player)
-		err := rows.Scan(
-			&player.Username,
-			&player.Password,
-			&player.accountBalance)
+		player, err := scanIntoPlayer(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -131,6 +147,33 @@ func (s *PostGresStore) GetPlayers() ([]*Player, error) {
 	}
 	return players, nil
 
+}
+
+func (s *PostGresStore) GetPlayerByID(id int) (*Player, error) {
+	rows, err := s.db.Query(`SELECT * FROM Player WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+
+	}
+
+	for rows.Next() {
+		return scanIntoPlayer(rows)
+	}
+	return nil, fmt.Errorf("player with id %d not found", id)
+
+}
+
+func scanIntoPlayer(rows *sql.Rows) (*Player, error) {
+	player := new(Player)
+	err := rows.Scan(
+		&player.ID,
+		&player.Username,
+		&player.Password,
+		&player.accountBalance)
+	if err != nil {
+		return nil, err
+	}
+	return player, nil
 }
 
 /*

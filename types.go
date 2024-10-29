@@ -1,7 +1,5 @@
 package main
 
-import "time"
-
 type Lige struct {
 	Naziv   string  `json:"naziv"`
 	Razrade Razrade `json:"razrade"`
@@ -17,13 +15,13 @@ type Tipovi struct {
 }
 
 type Ponude struct {
-	Broj          string    `json:"broj"`
-	ID            int       `json:"id"`
-	Naziv         string    `json:"naziv"`
-	Vrijeme       time.Time `json:"vrijeme"`
-	Tecajevi      Tecajevi  `json:"tecajevi"`
-	TvKanal       string    `json:"tv_kanal,omitempty"`
-	ImaStatistiku bool      `json:"ima_statistiku,omitempty"`
+	Broj          string   `json:"broj"`
+	ID            int      `json:"id"`
+	Naziv         string   `json:"naziv"`
+	Vrijeme       string   `json:"vrijeme"`
+	Tecajevi      Tecajevi `json:"tecajevi"`
+	TvKanal       string   `json:"tv_kanal,omitempty"`
+	ImaStatistiku bool     `json:"ima_statistiku,omitempty"`
 }
 
 type Tecajevi struct {
@@ -31,6 +29,7 @@ type Tecajevi struct {
 	Naziv string  `json:"naziv"`
 }
 type Player struct {
+	ID             int     `json:"id"`
 	Username       string  `json:"username"`
 	Password       string  `json:"password"`
 	accountBalance float64 `json:"account_balance"`
@@ -41,6 +40,22 @@ type CreatePlayerRequest struct {
 	Password string `json:"password"`
 }
 
+type CreatePonudaRequest struct {
+	Broj     string   `json:"broj"`
+	ID       int      `json:"id"`
+	Naziv    string   `json:"naziv"`
+	Vrijeme  string   `json:"vrijeme"`
+	Tecajevi Tecajevi `json:"tecajevi"`
+}
+
+func NewPonuda(broj string, ID int, naziv string, vrijeme string) *Ponude {
+	return &Ponude{
+		Broj:    broj,
+		ID:      ID,
+		Naziv:   naziv,
+		Vrijeme: vrijeme,
+	}
+}
 func NewPlayer(username, password string) *Player {
 	return &Player{
 		Username: username,
