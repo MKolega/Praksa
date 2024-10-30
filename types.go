@@ -1,27 +1,26 @@
 package main
 
 type Lige struct {
-	Naziv   string  `json:"naziv"`
-	Razrade Razrade `json:"razrade"`
-	Tipovi  Tipovi  `json:"tipovi"`
+	Naziv   string    `json:"naziv"`
+	Razrade []Razrade `json:"razrade"`
 }
 
 type Razrade struct {
-	Tipovi Tipovi `json:"tipovi"`
-	Ponude int    `json:"ponude"`
+	Tipovi []Tipovi `json:"tipovi"`
+	Ponude []int    `json:"ponude"`
 }
 type Tipovi struct {
 	Naziv string `json:"naziv"`
 }
 
 type Ponude struct {
-	Broj          string   `json:"broj"`
-	ID            int      `json:"id"`
-	Naziv         string   `json:"naziv"`
-	Vrijeme       string   `json:"vrijeme"`
-	Tecajevi      Tecajevi `json:"tecajevi"`
-	TvKanal       string   `json:"tv_kanal,omitempty"`
-	ImaStatistiku bool     `json:"ima_statistiku,omitempty"`
+	Broj          string     `json:"broj"`
+	ID            int        `json:"id"`
+	Naziv         string     `json:"naziv"`
+	Vrijeme       string     `json:"vrijeme"`
+	Tecajevi      []Tecajevi `json:"tecajevi"`
+	TvKanal       string     `json:"tv_kanal,omitempty"`
+	ImaStatistiku bool       `json:"ima_statistiku,omitempty"`
 }
 
 type Tecajevi struct {
@@ -32,7 +31,7 @@ type Player struct {
 	ID             int     `json:"id"`
 	Username       string  `json:"username"`
 	Password       string  `json:"password"`
-	accountBalance float64 `json:"account_balance"`
+	AccountBalance float64 `json:"account_balance"`
 }
 
 type CreatePlayerRequest struct {
@@ -46,6 +45,16 @@ type CreatePonudaRequest struct {
 	Naziv    string   `json:"naziv"`
 	Vrijeme  string   `json:"vrijeme"`
 	Tecajevi Tecajevi `json:"tecajevi"`
+}
+
+type OdigraniPar struct {
+	Ponuda    int    `json:"ponuda"`
+	NazivTipa string `json:"naziv"`
+}
+
+type CreateUplataRequest struct {
+	Amount      float64       `json:"amount"`
+	OdigraniPar []OdigraniPar `json:"odigrani_par"`
 }
 
 func NewPonuda(broj string, ID int, naziv string, vrijeme string) *Ponude {

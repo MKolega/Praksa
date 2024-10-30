@@ -15,7 +15,7 @@ type APIServer struct {
 }
 
 type APIError struct {
-	Error string
+	Error string `json:"error"`
 }
 type apiFunc func(http.ResponseWriter, *http.Request) error
 
@@ -33,9 +33,13 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
 	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handleCreatePonuda)).Methods("POST")
 	router.HandleFunc("/api/ponude/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPonuda))
+	router.HandleFunc("/api/uplata/{id:[0-9]+}", makeHTTPHandlefunc(s.handleUplata)).Methods("POST")
 	log.Println("JSON API Server is running on port: ", s.listenAddr)
 
-	http.ListenAndServe(s.listenAddr, router)
+	err := http.ListenAndServe(s.listenAddr, router)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 }
 
@@ -48,13 +52,12 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 func makeHTTPHandlefunc(f apiFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := f(w, r); err != nil {
-			WriteJSON(w, http.StatusBadRequest, APIError{Error: err.Error()})
-
+			_ = WriteJSON(w, http.StatusBadRequest, APIError{Error: err.Error()})
 		}
 	}
 }
 
-func (s *APIServer) ligeRequest(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) ligeRequest(w http.ResponseWriter, _ *http.Request) error {
 	lige, err := s.store.GetLige()
 
 	if err != nil {
@@ -86,7 +89,7 @@ func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) e
 	return WriteJSON(w, http.StatusCreated, player)
 }
 
-func (s *APIServer) handleGetPlayers(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) error {
 	player, err := s.store.GetPlayers()
 	if err != nil {
 		return err
@@ -97,10 +100,9 @@ func (s *APIServer) handleGetPlayers(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) error {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+	id, err := getID(r)
 	if err != nil {
-		return fmt.Errorf("invalid player id: %s", vars["id"])
+		return err
 	}
 	player, err := s.store.GetPlayerByID(id)
 	if err != nil {
@@ -109,10 +111,9 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 	return WriteJSON(w, http.StatusOK, player)
 }
 func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) error {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+	id, err := getID(r)
 	if err != nil {
-		return fmt.Errorf("invalid ponuda: %s", vars["id"])
+		return err
 	}
 	ponuda, err := s.store.GetPonuda(id)
 	if err != nil {
@@ -131,4 +132,32 @@ func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) e
 		return err
 	}
 	return WriteJSON(w, http.StatusCreated, ponuda)
+}
+
+func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
+	playerID, err := getID(r)
+	if err != nil {
+		return err
+	}
+
+	uplataReq := new(CreateUplataRequest)
+	if err := json.NewDecoder(r.Body).Decode(&uplataReq); err != nil {
+		return err
+	}
+
+	if err := s.store.CreateUplata(playerID, uplataReq.Amount, uplataReq.OdigraniPar); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, nil)
+
+}
+
+func getID(r *http.Request) (int, error) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		return 0, fmt.Errorf("invalid player id: %s", vars["id"])
+	}
+	return id, nil
 }

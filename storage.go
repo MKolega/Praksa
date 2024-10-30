@@ -2,8 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 type Storage interface {
@@ -13,6 +14,7 @@ type Storage interface {
 	CreatePlayer(*Player) error
 	GetPlayers() ([]*Player, error)
 	GetPlayerByID(id int) (*Player, error)
+	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
 
 type PostGresStore struct {
@@ -43,6 +45,17 @@ func (s *PostGresStore) createPlayerTable() error {
 			username VARCHAR(255) NOT NULL,
 			password VARCHAR(255) NOT NULL,
 			account_balance DECIMAL(10, 2) NOT NULL
+		);
+		
+		CREATE TABLE IF NOT EXISTS player_ponude (
+			id SERIAL PRIMARY KEY,
+			player_id INT NOT NULL,
+			ponuda_id INT NOT NULL,
+			tecaj       NUMERIC(5, 2) NOT NULL,
+			iznos_uloga NUMERIC(5, 2) NOT NULL,
+			tip VARCHAR(10) NOT NULL,
+			FOREIGN KEY (player_id) REFERENCES player(id) ON DELETE CASCADE,
+			FOREIGN KEY (ponuda_id) REFERENCES ponude(id) ON DELETE CASCADE
 		)
 	`)
 	return err
@@ -51,7 +64,7 @@ func (s *PostGresStore) createPlayerTable() error {
 func (s *PostGresStore) CreatePlayer(player *Player) error {
 	query := "INSERT INTO Player (username, password, account_balance) VALUES ($1, $2, $3)"
 	resp, err := s.db.Query(query,
-		player.Username, player.Password, player.accountBalance)
+		player.Username, player.Password, player.AccountBalance)
 	if err != nil {
 		return err
 	}
@@ -61,29 +74,75 @@ func (s *PostGresStore) CreatePlayer(player *Player) error {
 }
 
 func (s *PostGresStore) GetLige() ([]*Lige, error) {
-	rows, err := s.db.Query(`SELECT naziv,ponuda_id FROM lige,lige_ponude WHERE lige.id=lige_ponude.lige_id`)
+	rows, err := s.db.Query(`
+		SELECT l.naziv AS liga_naziv,
+		       r.ponude AS ponude,
+		       t.naziv AS tip_naziv
+		FROM lige l
+		LEFT JOIN razrade r ON l.id = r.lige_id
+		LEFT JOIN tipovi t ON r.id = t.razrade_id
+		ORDER BY l.naziv, r.id, t.naziv
+	`)
 	if err != nil {
 		return nil, err
 	}
-
-	lige := []*Lige{}
-	for rows.Next() {
-		liga := new(Lige)
-		err := rows.Scan(
-			&liga.Naziv,
-			&liga.Razrade.Ponude,
-		)
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
 		if err != nil {
+			fmt.Printf("Failed to close rows")
+		}
+	}(rows)
+
+	ligaMap := make(map[string]*Lige)
+
+	for rows.Next() {
+		var ligaNaziv string
+		var ponude pq.Int64Array
+		var tipNaziv sql.NullString
+
+		if err := rows.Scan(&ligaNaziv, &ponude, &tipNaziv); err != nil {
 			return nil, err
 		}
-		lige = append(lige, liga)
 
-		/*
-			if err := json.Unmarshal([]byte(razradeJSON), &liga.Tipovi); err != nil {
-				return nil, err
-			}*/
+		// Initialize liga
+		if _, exists := ligaMap[ligaNaziv]; !exists {
+			ligaMap[ligaNaziv] = &Lige{
+				Naziv:   ligaNaziv,
+				Razrade: []Razrade{{Tipovi: []Tipovi{}, Ponude: []int{}}},
+			}
+		}
+
+		liga := ligaMap[ligaNaziv]
+
+		// Initialize razrade
+		if len(liga.Razrade) == 0 {
+			liga.Razrade = append(liga.Razrade, Razrade{Tipovi: []Tipovi{}, Ponude: []int{}})
+		}
+
+		// Add tipovi
+		if tipNaziv.Valid {
+			tip := Tipovi{Naziv: tipNaziv.String}
+			liga.Razrade[0].Tipovi = append(liga.Razrade[0].Tipovi, tip) // Add tip to the first Razrada
+		}
+
+		// Add ponude
+		if len(liga.Razrade[0].Ponude) == 0 {
+			for _, p := range ponude {
+				liga.Razrade[0].Ponude = append(liga.Razrade[0].Ponude, int(p)) // Add ponude to the first Razrada
+			}
+		}
 	}
-	return lige, nil
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var ligas []*Lige
+	for _, liga := range ligaMap {
+		ligas = append(ligas, liga) // Add Liga to the final slice
+	}
+
+	return ligas, nil
 }
 
 func (s *PostGresStore) CreatePonuda(ponude *Ponude) error {
@@ -105,12 +164,14 @@ func (s *PostGresStore) CreatePonuda(ponude *Ponude) error {
 }
 
 func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
-	rows, err := s.db.Query(`SELECT id, broj, naziv, vrijeme, tv_kanal, ima_statistiku FROM ponude WHERE id = $1`, id)
+	rows, err := s.db.Query(`SELECT p.id, p.broj, p.naziv, p.vrijeme, p.tv_kanal, p.ima_statistiku, t.tecaj, t.naziv FROM ponude p LEFT JOIN tecajevi t ON p.id = t.ponuda_id WHERE p.id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
 	ponuda := new(Ponude)
+	ponuda.Tecajevi = []Tecajevi{}
 	for rows.Next() {
+		var tecaj Tecajevi
 		err := rows.Scan(
 			&ponuda.ID,
 			&ponuda.Broj,
@@ -118,10 +179,13 @@ func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
 			&ponuda.Vrijeme,
 			&ponuda.TvKanal,
 			&ponuda.ImaStatistiku,
+			&tecaj.Tecaj,
+			&tecaj.Naziv,
 		)
 		if err != nil {
 			return nil, err
 		}
+		ponuda.Tecajevi = append(ponuda.Tecajevi, tecaj)
 
 	}
 	if ponuda.ID == 0 {
@@ -137,7 +201,7 @@ func (s *PostGresStore) GetPlayers() ([]*Player, error) {
 		return nil, err
 
 	}
-	players := []*Player{}
+	var players []*Player
 	for rows.Next() {
 		player, err := scanIntoPlayer(rows)
 		if err != nil {
@@ -169,51 +233,65 @@ func scanIntoPlayer(rows *sql.Rows) (*Player, error) {
 		&player.ID,
 		&player.Username,
 		&player.Password,
-		&player.accountBalance)
+		&player.AccountBalance)
 	if err != nil {
 		return nil, err
 	}
 	return player, nil
 }
 
-/*
-func (s *PostGresStore) CreatePonuda(ponude Ponude) error {
-	return nil
-}
-*/
-/*
-	func (s *PostGresStore) GetPonuda(id int) ([]Ponude, error) {
-		ponuda := Ponude{}
-
-		query := "SELECT broj, id, naziv, vrijeme, tv_kanal, ima_statistiku FROM ponude WHERE id = $1"
-		row := s.db.QueryRow(query, id)
-		err := row.Scan(&ponuda.Broj, &ponuda.ID, &ponuda.Naziv, &ponuda.Vrijeme, &ponuda.TvKanal, &ponuda.ImaStatistiku)
-		if err != nil {
-			return Ponuda{}, err
-		}
-		return ponuda, nil
-	}
-*/
-/*func (s *PostGresStore) GetLige() (Lige, error) {
-	rows, err := s.db.Query(`SELECT naziv,ponude FROM lige`)
+func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []OdigraniPar) error {
+	tx, err := s.db.Begin()
 	if err != nil {
-		return Lige{}, err
+		return err
 	}
-	lige := Lige{}
-	for rows.Next() {
-		liga := new(Lige)
-		err := rows.Scan(&liga.Naziv, &liga.Razrade)
+	defer func(tx *sql.Tx) {
+		err := tx.Rollback()
 		if err != nil {
-			return Lige{}, err
+			fmt.Println("Failed to rollback transaction")
 		}
-		fmt.Printf("Liga: %s\n", liga.Naziv)
-		for _, razrada := range liga.Razrade {
-			for _, ponuda := range razrada.Ponude {
-				fmt.Printf("Ponuda: %d\n", ponuda)
+	}(tx) // Rollback in case of error
+
+	var currentBalance float64
+	err = tx.QueryRow(`SELECT account_balance FROM player WHERE id = $1`, playerID).Scan(&currentBalance)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("player with ID %d does not exist", playerID)
+		}
+		return err
+	}
+	/*
+		if currentBalance < amount {
+			return fmt.Errorf("player with ID %d does not have enough funds", playerID)
+		}
+	*/
+
+	for _, par := range parovi {
+		var ponudaID int
+		err = tx.QueryRow(`SELECT id FROM ponude WHERE id = $1`, par.Ponuda).Scan(&ponudaID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("ponuda with ID %d does not exist", par.Ponuda)
 			}
 		}
 
+		var tecaj float64
+		err = tx.QueryRow(`SELECT tecaj FROM tecajevi WHERE ponuda_id = $1 AND naziv = $2`, par.Ponuda, par.NazivTipa).Scan(&tecaj)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("tecaj for ponuda with ID %d and tip %s does not exist", par.Ponuda, par.NazivTipa)
+			}
+		}
+
+		_, err = tx.Exec(`INSERT INTO player_ponude (player_id, ponuda_id, tip,tecaj,iznos_uloga) VALUES ($1, $2, $3, $4, $5)`, playerID, par.Ponuda, par.NazivTipa, tecaj, amount)
+		if err != nil {
+			return err
+		}
 	}
-	return lige, nil
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
 }
-*/
