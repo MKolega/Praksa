@@ -9,6 +9,7 @@ import (
 
 type Storage interface {
 	CreatePonuda(*Ponude) error
+	CreateTecaj(ponudaID int, tecaj float64, naziv string) error
 	GetPonuda(id int) (*Ponude, error)
 	GetLige() ([]*Lige, error)
 	CreatePlayer(*Player) error
@@ -160,6 +161,19 @@ func (s *PostGresStore) CreatePonuda(ponude *Ponude) error {
 		return err
 	}
 
+	fmt.Printf("%+v\n", resp)
+	return nil
+}
+
+func (s *PostGresStore) CreateTecaj(ponudaID int, tecaj float64, naziv string) error {
+	query := " INSERT INTO tecajevi (ponuda_id, tecaj, naziv) VALUES ($1, $2, $3)"
+	resp, err := s.db.Query(query,
+		ponudaID,
+		tecaj,
+		naziv)
+	if err != nil {
+		return err
+	}
 	fmt.Printf("%+v\n", resp)
 	return nil
 }

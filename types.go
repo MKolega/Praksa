@@ -40,11 +40,13 @@ type CreatePlayerRequest struct {
 }
 
 type CreatePonudaRequest struct {
-	Broj     string   `json:"broj"`
-	ID       int      `json:"id"`
-	Naziv    string   `json:"naziv"`
-	Vrijeme  string   `json:"vrijeme"`
-	Tecajevi Tecajevi `json:"tecajevi"`
+	Broj          string     `json:"broj"`
+	ID            int        `json:"id"`
+	Naziv         string     `json:"naziv"`
+	Vrijeme       string     `json:"vrijeme"`
+	Tecajevi      []Tecajevi `json:"tecajevi"`
+	TvKanal       string     `json:"tv_kanal,omitempty"`
+	ImaStatistiku bool       `json:"ima_statistiku,omitempty"`
 }
 
 type OdigraniPar struct {
@@ -61,11 +63,14 @@ type CreateUplataRequest struct {
 }
 
 func NewPonuda(broj string, ID int, naziv string, vrijeme string) *Ponude {
+func NewPonuda(broj string, ID int, naziv string, vrijeme string, tvKanal string, imaStatistiku bool) *Ponude {
 	return &Ponude{
-		Broj:    broj,
-		ID:      ID,
-		Naziv:   naziv,
-		Vrijeme: vrijeme,
+		Broj:          broj,
+		ID:            ID,
+		Naziv:         naziv,
+		Vrijeme:       vrijeme,
+		TvKanal:       tvKanal,
+		ImaStatistiku: imaStatistiku,
 	}
 }
 func NewPlayer(username, password string) *Player {

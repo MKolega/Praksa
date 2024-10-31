@@ -128,13 +128,20 @@ func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) e
 	if err := json.NewDecoder(r.Body).Decode(createPonudaReq); err != nil {
 		return err
 	}
-	ponuda := NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme)
+
+	ponuda := NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme, createPonudaReq.TvKanal, createPonudaReq.ImaStatistiku)
 	if err := s.store.CreatePonuda(ponuda); err != nil {
 		return err
 	}
-	return WriteJSON(w, http.StatusCreated, ponuda)
-}
 
+	for _, tecaj := range createPonudaReq.Tecajevi {
+		if err := s.store.CreateTecaj(createPonudaReq.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
+			return err
+		}
+	}
+
+	return WriteJSON(w, http.StatusCreated, createPonudaReq)
+}
 func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 	playerID, err := getID(r)
 	if err != nil {
