@@ -33,6 +33,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
 	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handleCreatePonuda)).Methods("POST")
 	router.HandleFunc("/api/ponude/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPonuda))
+	router.HandleFunc("/api/deposit/{id:[0-9]+}", makeHTTPHandlefunc(s.handleDeposit)).Methods("POST")
 	router.HandleFunc("/api/uplata/{id:[0-9]+}", makeHTTPHandlefunc(s.handleUplata)).Methods("POST")
 	log.Println("JSON API Server is running on port: ", s.listenAddr)
 
@@ -149,8 +150,24 @@ func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	return WriteJSON(w, http.StatusOK, nil)
+	return WriteJSON(w, http.StatusOK, uplataReq)
 
+}
+
+func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error {
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+	depositRequest := new(DepositRequest)
+
+	if err := json.NewDecoder(r.Body).Decode(&depositRequest); err != nil {
+		return err
+	}
+	if err := s.store.Deposit(id, depositRequest.Amount); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, depositRequest)
 }
 
 func getID(r *http.Request) (int, error) {

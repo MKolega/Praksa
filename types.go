@@ -52,6 +52,9 @@ type OdigraniPar struct {
 	NazivTipa string `json:"naziv"`
 }
 
+type DepositRequest struct {
+	Amount float64 `json:"amount"`
+}
 type CreateUplataRequest struct {
 	Amount      float64       `json:"amount"`
 	OdigraniPar []OdigraniPar `json:"odigrani_par"`

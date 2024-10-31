@@ -14,6 +14,7 @@ type Storage interface {
 	CreatePlayer(*Player) error
 	GetPlayers() ([]*Player, error)
 	GetPlayerByID(id int) (*Player, error)
+	Deposit(id int, amount float64) error
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
 
@@ -240,6 +241,14 @@ func scanIntoPlayer(rows *sql.Rows) (*Player, error) {
 	return player, nil
 }
 
+func (s *PostGresStore) Deposit(id int, amount float64) error {
+	_, err := s.db.Exec(`UPDATE player SET account_balance = account_balance + $1 WHERE id = $2`, amount, id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []OdigraniPar) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -260,11 +269,9 @@ func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []Odig
 		}
 		return err
 	}
-	/*
-		if currentBalance < amount {
-			return fmt.Errorf("player with ID %d does not have enough funds", playerID)
-		}
-	*/
+	if currentBalance < amount {
+		return fmt.Errorf("player with ID %d does not have enough funds", playerID)
+	}
 
 	for _, par := range parovi {
 		var ponudaID int
@@ -281,6 +288,10 @@ func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []Odig
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("tecaj for ponuda with ID %d and tip %s does not exist", par.Ponuda, par.NazivTipa)
 			}
+		}
+
+		if amount*tecaj > 1000 {
+			return fmt.Errorf("winning amount is over 1000€")
 		}
 
 		_, err = tx.Exec(`INSERT INTO player_ponude (player_id, ponuda_id, tip,tecaj,iznos_uloga) VALUES ($1, $2, $3, $4, $5)`, playerID, par.Ponuda, par.NazivTipa, tecaj, amount)
