@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lib/pq"
+	"strconv"
 )
 
 type Storage interface {
 	CreatePonuda(*Ponude) error
 	CreateTecaj(ponudaID int, tecaj float64, naziv string) error
 	GetPonuda(id int) (*Ponude, error)
+	GetAllPonude() ([]*Ponude, error)
 	GetLige() ([]*Lige, error)
 	CreatePlayer(*Player) error
 	GetPlayers() ([]*Player, error)
@@ -207,6 +209,63 @@ func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
 		return nil, fmt.Errorf("ponuda with id %d not found", id)
 	}
 	return ponuda, nil
+}
+
+func (s *PostGresStore) GetAllPonude() ([]*Ponude, error) {
+	rows, err := s.db.Query(`
+		SELECT p.id, p.broj, p.naziv, p.vrijeme, p.tv_kanal, p.ima_statistiku, t.tecaj, t.naziv 
+		FROM ponude p 
+		LEFT JOIN tecajevi t ON p.id = t.ponuda_id
+		ORDER BY p.vrijeme DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			fmt.Printf("Failed to close rows")
+		}
+	}(rows)
+
+	ponudeMap := make(map[string]*Ponude)
+
+	for rows.Next() {
+		var id int
+		var tecaj Tecajevi
+		ponuda := Ponude{}
+
+		err := rows.Scan(
+			&id,
+			&ponuda.Broj,
+			&ponuda.Naziv,
+			&ponuda.Vrijeme,
+			&ponuda.TvKanal,
+			&ponuda.ImaStatistiku,
+			&tecaj.Tecaj,
+			&tecaj.Naziv,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if existingPonuda, exists := ponudeMap[strconv.Itoa(id)]; exists {
+
+			existingPonuda.Tecajevi = append(existingPonuda.Tecajevi, tecaj)
+		} else {
+
+			ponuda.ID = id
+			ponuda.Tecajevi = []Tecajevi{tecaj}
+			ponudeMap[strconv.Itoa(id)] = &ponuda
+		}
+	}
+
+	ponude := make([]*Ponude, 0, len(ponudeMap))
+	for _, ponuda := range ponudeMap {
+		ponude = append(ponude, ponuda)
+	}
+
+	return ponude, nil
 }
 
 func (s *PostGresStore) GetPlayers() ([]*Player, error) {

@@ -28,13 +28,15 @@ func NewApiServer(listenAddr string, store Storage) *APIServer {
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
+	router.Use(enableCors)
 	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.ligeRequest))
 	router.HandleFunc("/api/players", makeHTTPHandlefunc(s.handlePlayer))
 	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
-	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handleCreatePonuda)).Methods("POST")
+	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handlePonude))
 	router.HandleFunc("/api/ponude/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPonuda))
 	router.HandleFunc("/api/deposit/{id:[0-9]+}", makeHTTPHandlefunc(s.handleDeposit)).Methods("POST")
 	router.HandleFunc("/api/uplata/{id:[0-9]+}", makeHTTPHandlefunc(s.handleUplata)).Methods("POST")
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./client/build")))
 	log.Println("JSON API Server is running on port: ", s.listenAddr)
 
 	err := http.ListenAndServe(s.listenAddr, router)
@@ -42,6 +44,15 @@ func (s *APIServer) Run() {
 		log.Fatal(err)
 	}
 
+}
+
+func enableCors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -74,6 +85,16 @@ func (s *APIServer) handlePlayer(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "POST" {
 		return s.handleCreatePlayer(w, r)
 
+	}
+	return fmt.Errorf("method not allowed %s", r.Method)
+}
+
+func (s *APIServer) handlePonude(w http.ResponseWriter, r *http.Request) error {
+	if r.Method == "GET" {
+		return s.handeGetAllPonude(w, r)
+	}
+	if r.Method == "POST" {
+		return s.handleCreatePonuda(w, r)
 	}
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
@@ -177,6 +198,13 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 	return WriteJSON(w, http.StatusOK, depositRequest)
 }
 
+func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, r *http.Request) error {
+	ponude, err := s.store.GetAllPonude()
+	if err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, ponude)
+}
 func getID(r *http.Request) (int, error) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])

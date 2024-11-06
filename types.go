@@ -62,7 +62,17 @@ type CreateUplataRequest struct {
 	OdigraniPar []OdigraniPar `json:"odigrani_par"`
 }
 
-func NewPonuda(broj string, ID int, naziv string, vrijeme string) *Ponude {
+type LigePonude struct {
+	LigaNaziv string           `json:"LigaNaziv"`
+	Tipovi    []string         `json:"tipovi"`
+	Ponude    []PonudeTecajevi `json:"ponude"`
+}
+
+type PonudeTecajevi struct {
+	NazivPonude string    `json:"NazivPonude"`
+	Tecajevi    []float64 `json:"Tecajevi"`
+}
+
 func NewPonuda(broj string, ID int, naziv string, vrijeme string, tvKanal string, imaStatistiku bool) *Ponude {
 	return &Ponude{
 		Broj:          broj,
