@@ -12,9 +12,11 @@ const HomePage = () => {
         const fetchData = async () => {
             try {
                 const ligeData = await getLige();
+                console.log("Lige data:", ligeData); // Debug log
                 setLige(ligeData);
 
                 const ponudeData = await getPonude();
+                console.log("Ponude data:", ponudeData); // Debug log
                 setPonude(ponudeData);
 
             } catch (err) {
@@ -25,10 +27,9 @@ const HomePage = () => {
         fetchData();
     }, []);
 
-
-    const getPonudeForLiga = (ligaId) => {
+    const getPonudeForLiga = (liga) => {
         return ponude
-            .filter((ponuda) => ponuda.ligaId === ligaId)
+            .filter((ponuda) => liga.razrade.some((razrada) => razrada.ponude.includes(ponuda.id)))
             .sort((a, b) => new Date(a.vrijeme) - new Date(b.vrijeme));
     };
 
@@ -55,7 +56,7 @@ const HomePage = () => {
                         </tr>
                         </thead>
                         <tbody>
-                        {getPonudeForLiga(liga.id).map((ponuda) => (
+                        {getPonudeForLiga(liga).map((ponuda) => (
                             <tr key={ponuda.id} className="ponuda-row">
                                 <td>{ponuda.naziv}</td>
                                 <td>{format(new Date(ponuda.vrijeme), 'dd/MM/yyyy HH:mm')}</td>

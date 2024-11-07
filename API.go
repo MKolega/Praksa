@@ -198,7 +198,7 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 	return WriteJSON(w, http.StatusOK, depositRequest)
 }
 
-func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, _ *http.Request) error {
 	ponude, err := s.store.GetAllPonude()
 	if err != nil {
 		return err
