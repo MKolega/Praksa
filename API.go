@@ -139,7 +139,7 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-	loginReq := new(LoginRequest)
+	loginReq := new(Player)
 	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
 		return err
 	}
@@ -147,8 +147,6 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Password:%s", player.Password)
-	fmt.Printf("LoginReq:%s", loginReq.Password)
 	if player.Password == loginReq.Password {
 		return WriteJSON(w, http.StatusOK, player)
 	}

@@ -6,7 +6,7 @@
 
 .login-container {
     position: absolute;
-    top: 0;
+    top: 20px;
     padding-right: 200px;
     right: 0;
     max-width: 300px;
@@ -19,10 +19,49 @@
     margin-top: 10px;
 }
 
+.welcome-message {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    margin-right: 20px;
+    font-size: 18px;
+}
+.add-funds-button {
+    background-color: #007bff;
+    color: #ffffff;
+    font-weight: bold;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.add-funds-button:hover {
+    background-color: #0056b3;
+}
+
+.logout-button {
+    background-color: red;
+    color: #ffffff;
+    font-weight: bold;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.logout-button:hover {
+    background-color: darkred;
+
+}
+
 .login-links {
     display: flex;
     justify-content: space-between;
     width: 100%;
+    margin-left: 5px;
     margin-bottom: 10px;
 }
 
