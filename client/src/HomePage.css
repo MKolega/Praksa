@@ -2,6 +2,67 @@
     padding: 20px;
 }
 
+/* HomePage.css */
+
+.login-container {
+    position: absolute;
+    top: 0;
+    padding-right: 200px;
+    right: 0;
+    max-width: 300px;
+    width: 50%;
+}
+
+.sport{
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.login-links {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.register-link,
+.forgot-password-link {
+    color: blue;
+    text-decoration: underline;
+    font-size: 14px;
+
+}
+
+.login-form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.login-input {
+    background-color: whitesmoke; /* Dark red for input fields */
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    width: 150px;
+    font-size: 14px;
+}
+
+.login-button {
+    background-color: #00cc00; /* Bright green for button */
+    color: #ffffff;
+    font-weight: bold;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.login-button:hover {
+    background-color: #009900; /* Darken green on hover */
+}
+
 .liga-section {
     margin-bottom: 40px;
 }

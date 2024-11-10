@@ -32,6 +32,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.ligeRequest))
 	router.HandleFunc("/api/players", makeHTTPHandlefunc(s.handlePlayer))
 	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
+	router.HandleFunc("/api/login", makeHTTPHandlefunc(s.handleLogin))
 	router.HandleFunc("/api/ponude", makeHTTPHandlefunc(s.handlePonude))
 	router.HandleFunc("/api/ponude/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPonuda))
 	router.HandleFunc("/api/deposit/{id:[0-9]+}", makeHTTPHandlefunc(s.handleDeposit)).Methods("POST")
@@ -50,7 +51,11 @@ func enableCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -132,6 +137,25 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 	}
 	return WriteJSON(w, http.StatusOK, player)
 }
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+	loginReq := new(LoginRequest)
+	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
+		return err
+	}
+	player, err := s.store.GetLogin(loginReq.Username)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Password:%s", player.Password)
+	fmt.Printf("LoginReq:%s", loginReq.Password)
+	if player.Password == loginReq.Password {
+		return WriteJSON(w, http.StatusOK, player)
+	}
+
+	return fmt.Errorf("invalid password")
+}
+
 func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {

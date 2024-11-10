@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getLige, getPonude } from './apiService';
+import { getLige, getPonude, loginUser} from './apiService';
 import { format } from 'date-fns';
 import './HomePage.css';
 
@@ -7,25 +7,42 @@ const HomePage = () => {
     const [lige, setLige] = useState([]);
     const [error, setError] = useState(null);
     const [ponude, setPonude] = useState([]);
+    const [username, setUsername] = useState('');
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const ligeData = await getLige();
-                console.log("Lige data:", ligeData); // Debug log
                 setLige(ligeData);
 
                 const ponudeData = await getPonude();
-                console.log("Ponude data:", ponudeData); // Debug log
                 setPonude(ponudeData);
 
             } catch (err) {
-                setError("Could not load data");
-                console.error(err);
+                alert("Could not load data");
             }
         };
         fetchData();
     }, []);
+
+    const handleLogin = async () => {
+        const username = document.querySelector('.login-input[type="username"]').value;
+        const password = document.querySelector('.login-input[type="password"]').value;
+
+        try {
+            const response = await loginUser(username, password);
+            if (!response.error) {
+                setUsername(username);
+                setIsLoggedIn(true);
+                console.log('Login successful');
+            } else {
+                alert('Invalid credentials');
+            }
+        } catch (err) {
+            alert(`Login failed - ${err.message}`);
+        }
+    };
 
     const getPonudeForLiga = (liga) => {
         return ponude
@@ -37,7 +54,22 @@ const HomePage = () => {
 
     return (
         <div className="home-page">
-            <h1>Sport</h1>
+            {isLoggedIn ? (
+                <div className="welcome-message">Welcome, {username}</div>
+            ) : (
+                <div className="login-container">
+                    <div className="login-links">
+                        <a href="/register" className="register-link">Registracija</a>
+                        <a href="/forgot-password" className="forgot-password-link">Zaboravio sam lozinku!</a>
+                    </div>
+                    <div className="login-form">
+                        <input type="username" placeholder="nadimak" className="login-input"/>
+                        <input type="password" placeholder="lozinka" className="login-input"/>
+                        <button className="login-button" onClick={handleLogin}>PRIJAVI ME</button>
+                    </div>
+                </div>
+            )}
+            <h1 className="sport">Sport</h1>
             {lige.map((liga) => (
                 <div key={liga.id} className="liga-section">
                     <h2>{liga.naziv}</h2>

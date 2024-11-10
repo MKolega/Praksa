@@ -17,6 +17,7 @@ type Storage interface {
 	CreatePlayer(*Player) error
 	GetPlayers() ([]*Player, error)
 	GetPlayerByID(id int) (*Player, error)
+	GetLogin(username string) (*Player, error)
 	Deposit(id int, amount float64) error
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
@@ -284,6 +285,19 @@ func (s *PostGresStore) GetPlayers() ([]*Player, error) {
 		players = append(players, player)
 	}
 	return players, nil
+
+}
+
+func (s *PostGresStore) GetLogin(username string) (*Player, error) {
+	rows, err := s.db.Query(`SELECT * FROM Player WHERE username = $1`, username)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoPlayer(rows)
+	}
+	return nil, fmt.Errorf("player with username %s not found", username)
 
 }
 
