@@ -1,5 +1,17 @@
 .home-page {
     padding: 20px;
+    transition: filter 0.3s ease;
+}
+
+.home-page.blur {
+    filter: blur(5px);
+    pointer-events: none;
+}
+
+
+.home-page.blur .popup {
+    filter: none !important;
+    pointer-events: auto;
 }
 
 /* HomePage.css */
@@ -100,6 +112,47 @@
 
 .login-button:hover {
     background-color: #009900; /* Darken green on hover */
+}
+
+.popup {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 20%;
+    z-index: 1000;
+}
+
+.popup-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.register-input {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.register-button, .close-button {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.register-button {
+    background-color: #007bff;
+    color: white;
+}
+
+.close-button {
+    background-color: red;
+    color: white;
 }
 
 .liga-section {

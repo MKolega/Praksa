@@ -18,6 +18,7 @@ type Storage interface {
 	GetPlayers() ([]*Player, error)
 	GetPlayerByID(id int) (*Player, error)
 	GetLogin(username string) (*Player, error)
+	ResetPassword(username string, newPassword string) error
 	Deposit(id int, amount float64) error
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
@@ -288,6 +289,14 @@ func (s *PostGresStore) GetPlayers() ([]*Player, error) {
 
 }
 
+func (s *PostGresStore) ResetPassword(username string, newPassword string) error {
+	_, err := s.db.Exec(`UPDATE Player SET password = $1 WHERE username = $2`, newPassword, username)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
 func (s *PostGresStore) GetLogin(username string) (*Player, error) {
 	rows, err := s.db.Query(`SELECT * FROM Player WHERE username = $1`, username)
 	if err != nil {

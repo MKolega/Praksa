@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import {deposit, getLige, getPonude, loginUser} from './apiService';
+import {deposit, getLige, getPonude, loginUser, passwordReset, registerUser} from './apiService';
 import { format } from 'date-fns';
 import './HomePage.css';
 
 const HomePage = () => {
     const [lige, setLige] = useState([]);
-    const [error, setError] = useState(null);
+    const [error] = useState(null);
     const [ponude, setPonude] = useState([]);
     const [username, setUsername] = useState('');
     const [AccountID, setID] = useState(0);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [funds, setFunds] = useState(0);
+    const [showRegisterPopup, setShowRegisterPopup] = useState(false);
+    const [showPasswordResetPopup, setShowPasswordResetPopup] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -33,7 +35,7 @@ const HomePage = () => {
         const password = document.querySelector('.login-input[type="password"]').value;
 
         try {
-            const response = await loginUser(username, password, AccountID);
+            const response = await loginUser(username, password);
             if (!response.error) {
                 const AccountID = response.id;
                 const AccountBalance = response.account_balance;
@@ -56,6 +58,59 @@ const HomePage = () => {
         setFunds(0);
         setIsLoggedIn(false);
     };
+
+
+    const handleRegisterClick = () => {
+    setShowRegisterPopup(true);
+};
+    const handleRegister = async ()  => {
+
+    const username = document.querySelector('.register-input[type="text"]').value;
+    const password = document.querySelector('.register-input[type="password"]').value;
+    const confirmPassword = document.querySelector('.register-input[type="password"]:nth-of-type(2)').value;
+
+    if (password !== confirmPassword) {
+        alert('Passwords do not match');
+        return;
+    }
+    try{
+        const response = await registerUser(username, password);
+        if (!response.error) {
+            alert('Registration successful');
+            await loginUser(username, password);
+        } else {
+            alert('Error registering');
+        }
+    }catch (err) {
+        alert(`Registration failed - ${err.message}`);
+    }
+    setShowRegisterPopup(false);
+};
+
+    const handlePasswordResetClick = () => {
+        setShowPasswordResetPopup(true);
+    }
+    const handlePasswordReset = async () => {
+        const username = document.querySelector('.register-input[type="text"]').value;
+        const password = document.querySelector('.register-input[type="password"]').value;
+        const confirmPassword = document.querySelector('.register-input[type="password"]:nth-of-type(2)').value;
+
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+        try {
+            const response = await passwordReset(username, password);
+            if (!response.error) {
+                alert('Password reset successful');
+            } else {
+                alert('Error resetting password');
+            }
+        } catch (err) {
+            alert(`Password reset failed - ${err.message}`);
+        }
+        setShowPasswordResetPopup(false);
+    }
 
     const handleAddFunds = async () => {
         const amount = prompt("Enter the amount to add:");
@@ -83,7 +138,7 @@ const HomePage = () => {
     if (error) return <div>{error}</div>;
 
     return (
-        <div className="home-page">
+        <div className={`home-page`}>
             {isLoggedIn ? (
                 <div className="welcome-message">
                     Welcome, {username} (Balance: ${funds.toFixed(2)})
@@ -99,17 +154,41 @@ const HomePage = () => {
                         <button className="login-button" onClick={handleLogin}>PRIJAVA</button>
                     </div>
                     <div className="login-links">
-                        <a href="/register" className="register-link">Registracija</a>
-                        <a href="/forgot-password" className="forgot-password-link">Zaboravio sam lozinku!</a>
+                        <a href="#" className="register-link" onClick={handleRegisterClick}>Registracija</a> <a
+                        href="#" className="forgot-password-link" onClick={handlePasswordResetClick}>Zaboravio sam lozinku!</a>
                     </div>
                 </div>
+            )}
+            {showRegisterPopup && (
+                <div className="popup">
+                    <div className="popup-inner">
+                        <h2>Register</h2>
+                        <input type="text" placeholder="Username" className="register-input"/>
+                        <input type="password" placeholder="Password" className="register-input"/>
+                        <input type="password" placeholder="Confirm Password" className="register-input"/>
+                        <button className="register-button" onClick={handleRegister}>Register</button>
+                        <button className="close-button" onClick={() => setShowRegisterPopup(false)}>Close</button>
+                    </div>
+                </div>
+            )}
+            {showPasswordResetPopup && (
+            <div className="popup">
+                <div className="popup-inner">
+                    <h2>Password Reset</h2>
+                    <input type="text" placeholder="Username" className="register-input"/>
+                    <input type="password" placeholder="New Password" className="register-input"/>
+                    <input type="password" placeholder="Confirm Password" className="register-input"/>
+                    <button className="register-button" onClick={handlePasswordReset}>Reset</button>
+                    <button className="close-button" onClick={() => setShowPasswordResetPopup(false)}>Close</button>
+                </div>
+            </div>
             )}
             <h1 className="sport">Sport</h1>
             {lige.map((liga) => (
                 <div key={liga.id} className="liga-section">
                     <h2>{liga.naziv}</h2>
                     <table className="league-table">
-                    <thead>
+                        <thead>
                         <tr>
                             <th>Match</th>
                             <th>Time</th>

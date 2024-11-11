@@ -50,7 +50,7 @@ func (s *APIServer) Run() {
 func enableCors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -91,6 +91,9 @@ func (s *APIServer) handlePlayer(w http.ResponseWriter, r *http.Request) error {
 		return s.handleCreatePlayer(w, r)
 
 	}
+	if r.Method == "PUT" {
+		return s.handlePasswordReset(w, r)
+	}
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
@@ -126,6 +129,16 @@ func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) err
 
 }
 
+func (s *APIServer) handlePasswordReset(w http.ResponseWriter, r *http.Request) error {
+	resetRequest := new(CreatePlayerRequest)
+	if err := json.NewDecoder(r.Body).Decode(resetRequest); err != nil {
+		return err
+	}
+	if err := s.store.ResetPassword(resetRequest.Username, resetRequest.Password); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, resetRequest)
+}
 func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
