@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -27,6 +28,18 @@ func NewApiServer(listenAddr string, store Storage) *APIServer {
 }
 
 func (s *APIServer) Run() {
+
+	ligeURL := "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/lige.json"
+	err := s.InsertLigeData(ligeURL)
+	if err != nil {
+		log.Fatal("failed to insert lige data: ", err)
+	}
+	ponudeURL := "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/ponude.json"
+	err = s.InsertPonudeData(ponudeURL)
+	if err != nil {
+		log.Fatal("failed to insert ponude data: ", err)
+	}
+
 	router := mux.NewRouter()
 	router.Use(enableCors)
 	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.ligeRequest))
@@ -38,9 +51,10 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/api/deposit/{id:[0-9]+}", makeHTTPHandlefunc(s.handleDeposit)).Methods("POST")
 	router.HandleFunc("/api/uplata/{id:[0-9]+}", makeHTTPHandlefunc(s.handleUplata)).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./client/build")))
+
 	log.Println("JSON API Server is running on port: ", s.listenAddr)
 
-	err := http.ListenAndServe(s.listenAddr, router)
+	err = http.ListenAndServe(s.listenAddr, router)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,6 +88,87 @@ func makeHTTPHandlefunc(f apiFunc) http.HandlerFunc {
 	}
 }
 
+func (s *APIServer) InsertLigeData(url string) error {
+
+	r, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch data from %s: %v", url, err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("failed to close response", err)
+		}
+	}(r.Body)
+
+	var jsonData JsonData
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&jsonData); err != nil {
+		return fmt.Errorf("failed to decode JSON: %v", err)
+	}
+
+	for _, liga := range jsonData.Lige {
+		ligaID, err := s.store.CreateLiga(liga.Naziv)
+		if err != nil {
+			log.Printf("failed to insert liga %s: %v", liga.Naziv, err)
+			continue
+		}
+
+		for _, razrada := range liga.Razrade {
+			razradaID, err := s.store.CreateRazrada(ligaID, razrada.Ponude)
+			if err != nil {
+				log.Printf("failed to insert razrada for liga %s: %v", liga.Naziv, err)
+				continue
+			}
+
+			for _, tip := range razrada.Tipovi {
+				err := s.store.CreateTipovi(razradaID, tip.Naziv)
+				if err != nil {
+					log.Printf("failed to insert tip %s for razrada %d: %v", tip.Naziv, razradaID, err)
+
+				}
+			}
+		}
+	}
+	log.Println("Successfully updated Lige data.")
+
+	return nil
+}
+
+func (s *APIServer) InsertPonudeData(url string) error {
+	r, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch data from %s: %v", url, err)
+
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("failed to close response", err)
+		}
+	}(r.Body)
+
+	var jsonData []Ponude
+	if err := json.NewDecoder(r.Body).Decode(&jsonData); err != nil {
+		return fmt.Errorf("failed to decode JSON: %v", err)
+	}
+	for _, ponuda := range jsonData {
+		if err := s.store.CreatePonuda(&ponuda); err != nil {
+			log.Printf("failed to insert ponuda with ID %d: %v", ponuda.ID, err)
+			continue
+		}
+
+		for _, tecaj := range ponuda.Tecajevi {
+			if err := s.store.CreateTecaj(ponuda.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
+				log.Printf("failed to insert tecaj '%s' for ponuda ID %d: %v", tecaj.Naziv, ponuda.ID, err)
+			}
+		}
+	}
+
+	log.Println("Successfully updated Ponude data.")
+	return nil
+}
+
 func (s *APIServer) ligeRequest(w http.ResponseWriter, _ *http.Request) error {
 	lige, err := s.store.GetLige()
 
@@ -94,6 +189,10 @@ func (s *APIServer) handlePlayer(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "PUT" {
 		return s.handlePasswordReset(w, r)
 	}
+	if r.Method == "DELETE" {
+		return s.handleDeleteUser(w, r)
+	}
+
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
@@ -138,6 +237,19 @@ func (s *APIServer) handlePasswordReset(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 	return WriteJSON(w, http.StatusOK, resetRequest)
+}
+
+func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.DeleteUser(id); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, id)
+
 }
 func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)

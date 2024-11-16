@@ -13,6 +13,10 @@ type Tipovi struct {
 	Naziv string `json:"naziv"`
 }
 
+type JsonData struct {
+	Lige []Lige `json:"lige"`
+}
+
 type Ponude struct {
 	Broj          string     `json:"broj"`
 	ID            int        `json:"id"`
@@ -60,17 +64,6 @@ type DepositRequest struct {
 type CreateUplataRequest struct {
 	Amount      float64       `json:"amount"`
 	OdigraniPar []OdigraniPar `json:"odigrani_par"`
-}
-
-type LigePonude struct {
-	LigaNaziv string           `json:"LigaNaziv"`
-	Tipovi    []string         `json:"tipovi"`
-	Ponude    []PonudeTecajevi `json:"ponude"`
-}
-
-type PonudeTecajevi struct {
-	NazivPonude string    `json:"NazivPonude"`
-	Tecajevi    []float64 `json:"Tecajevi"`
 }
 
 func NewPonuda(broj string, ID int, naziv string, vrijeme string, tvKanal string, imaStatistiku bool) *Ponude {
