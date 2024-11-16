@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {deposit, getLige, getPonude, loginUser, passwordReset, registerUser} from './apiService';
+import {deleteUser, deposit, getLige, getPonude, loginUser, passwordReset, registerUser} from './apiService';
 import { format } from 'date-fns';
 import './HomePage.css';
 
@@ -13,6 +13,8 @@ const HomePage = () => {
     const [funds, setFunds] = useState(0);
     const [showRegisterPopup, setShowRegisterPopup] = useState(false);
     const [showPasswordResetPopup, setShowPasswordResetPopup] = useState(false);
+    const [selectedCells, setSelectedCells] = useState([]);
+    const [uplata,setUplata] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -59,6 +61,22 @@ const HomePage = () => {
         setIsLoggedIn(false);
     };
 
+    const handleDeleteUser = async () => {
+        const confirmation = window.confirm("Are you sure you want to delete your account?");
+        if (!confirmation) return;
+
+        try {
+            const response = await deleteUser(AccountID);
+            if (!response.error) {
+                alert('Account deleted successfully');
+                handleLogout();
+            } else {
+                alert('Error deleting account');
+            }
+        }catch (err) {
+            alert(`Failed to delete account - ${err.message}`);
+        }
+    };
 
     const handleRegisterClick = () => {
     setShowRegisterPopup(true);
@@ -128,6 +146,51 @@ const HomePage = () => {
             }
         }
     };
+    const handleSelect = (e, ponuda) => {
+        const selectedCell = e.target;
+        const row = selectedCell.closest('tr');
+        const tipovi = ["1", "X", "2", "1X", "X2", "12", "F+2"];
+        const tip = tipovi[selectedCell.cellIndex - 2];
+
+        if (selectedCell.tagName === 'TD') {
+            if (selectedCell.classList.contains('selected')) {
+
+                selectedCell.classList.remove('selected');
+
+                setSelectedCells((prevSelectedCells) =>
+                    prevSelectedCells.filter((cell) => !(cell.ponuda.id === ponuda.id && cell.column === tip))
+                );
+            } else {
+                const previouslySelectedInRow = Array.from(row.querySelectorAll('td.selected'));
+                previouslySelectedInRow.forEach((cell) => cell.classList.remove('selected'));
+
+                setSelectedCells((prevSelectedCells) =>
+                    prevSelectedCells.filter(
+                        (cell) => cell.ponuda.id !== ponuda.id
+                    )
+                );
+
+                selectedCell.classList.add('selected');
+                setSelectedCells((prevSelectedCells) => [
+                    ...prevSelectedCells,
+                    { cell: selectedCell.textContent, ponuda, column: tip },
+                ]);
+            }
+        }
+    };
+
+    const handlePay = () => {
+        if (uplata <= 0 || selectedCells.length === 0) {
+            alert("Please select valid matches and enter a positive bet amount.");
+            return;
+        }
+        alert(`Processing payment of €${uplata.toFixed(2)} with odds ${calculateTecaj()}.`);
+    };
+
+    const calculateTecaj = () => {
+        if (selectedCells.length === 0) return "Odaberite parove";
+        return selectedCells.reduce((acc, selectedItem) => acc * parseFloat(selectedItem.cell), 1).toFixed(4);
+    };
 
     const getPonudeForLiga = (liga) => {
         return ponude
@@ -144,6 +207,7 @@ const HomePage = () => {
                     Welcome, {username} (Balance: ${funds.toFixed(2)})
                     <button className="add-funds-button" onClick={handleAddFunds}>Add Funds</button>
                     <button className="logout-button" onClick={handleLogout}>Logout</button>
+                    <button className="delete-account-button" onClick={handleDeleteUser}>Delete Account</button>
                 </div>
 
             ) : (
@@ -155,7 +219,8 @@ const HomePage = () => {
                     </div>
                     <div className="login-links">
                         <a href="#" className="register-link" onClick={handleRegisterClick}>Registracija</a> <a
-                        href="#" className="forgot-password-link" onClick={handlePasswordResetClick}>Zaboravio sam lozinku!</a>
+                        href="#" className="forgot-password-link" onClick={handlePasswordResetClick}>Zaboravio sam
+                        lozinku!</a>
                     </div>
                 </div>
             )}
@@ -172,51 +237,88 @@ const HomePage = () => {
                 </div>
             )}
             {showPasswordResetPopup && (
-            <div className="popup">
-                <div className="popup-inner">
-                    <h2>Password Reset</h2>
-                    <input type="text" placeholder="Username" className="register-input"/>
-                    <input type="password" placeholder="New Password" className="register-input"/>
-                    <input type="password" placeholder="Confirm Password" className="register-input"/>
-                    <button className="register-button" onClick={handlePasswordReset}>Reset</button>
-                    <button className="close-button" onClick={() => setShowPasswordResetPopup(false)}>Close</button>
+                <div className="popup">
+                    <div className="popup-inner">
+                        <h2>Password Reset</h2>
+                        <input type="text" placeholder="Username" className="register-input"/>
+                        <input type="password" placeholder="New Password" className="register-input"/>
+                        <input type="password" placeholder="Confirm Password" className="register-input"/>
+                        <button className="register-button" onClick={handlePasswordReset}>Reset</button>
+                        <button className="close-button" onClick={() => setShowPasswordResetPopup(false)}>Close</button>
+                    </div>
                 </div>
-            </div>
             )}
-            <h1 className="sport">Sport</h1>
-            {lige.map((liga) => (
-                <div key={liga.id} className="liga-section">
-                    <h2>{liga.naziv}</h2>
-                    <table className="league-table">
-                        <thead>
-                        <tr>
-                            <th>Match</th>
-                            <th>Time</th>
-                            <th>1</th>
-                            <th>X</th>
-                            <th>2</th>
-                            <th>1X</th>
-                            <th>X2</th>
-                            <th>12</th>
-                            <th>F+2</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {getPonudeForLiga(liga).map((ponuda) => (
-                            <tr key={ponuda.id} className="ponuda-row">
-                                <td>{ponuda.naziv}</td>
-                                <td>{format(new Date(ponuda.vrijeme), 'dd/MM/yyyy HH:mm')}</td>
-                                {['1', 'X', '2', '1X', 'X2', '12', 'f+2'].map((betType) => (
-                                    <td key={betType}>
-                                        {ponuda.tecajevi.find((tecaj) => tecaj.naziv === betType)?.tecaj || '-'}
-                                    </td>
-                                ))}
+            <div className="main-table">
+                <h1 className="sport">Sport</h1>
+                {lige.map((liga) => (
+                    <div key={liga.id} className="liga-section">
+                        <h2>{liga.naziv}</h2>
+                        <table className="league-table">
+                            <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Time</th>
+                                <th>1</th>
+                                <th>X</th>
+                                <th>2</th>
+                                <th>1X</th>
+                                <th>X2</th>
+                                <th>12</th>
+                                <th>F+2</th>
                             </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                            {getPonudeForLiga(liga).map((ponuda) => (
+                                <tr key={ponuda.id} className="ponuda-row">
+                                    <td>{ponuda.naziv}</td>
+                                    <td>{format(new Date(ponuda.vrijeme), 'dd/MM/yyyy HH:mm')}</td>
+                                    {['1', 'X', '2', '1X', 'X2', '12', 'f+2'].map((betType) => (
+                                        <td key={betType} onClick={(e) => handleSelect(e, ponuda)} >
+                                            {ponuda.tecajevi.find((tecaj) => tecaj.naziv === betType)?.tecaj || '-'}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ))}
+            </div>
+            <div className="side-panel">
+                <h2>Parovi:</h2>
+                <ul>
+                    {selectedCells.map((selectedItem, index) => {
+                        const tecaj = selectedItem.cell;
+                        const ponuda = selectedItem.ponuda;
+                        const tip = selectedItem.column;
+                        return (
+                            <li key={index}>
+                                {ponuda ? (
+                                    <div>
+                                        <strong>Match:</strong> {ponuda.naziv} <br/>
+                                        <strong>Tip:</strong> {tip} <br/>
+                                        <strong>Tecaj:</strong> {tecaj}
+                                    </div>
+                                ) : (
+                                    <div>Invalid or missing ponuda data</div>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+                <div className="Uplata">
+                    <strong>Uplata:</strong> <input type="number" value={uplata} defaultValue="0"
+                                                    onChange={(e) => setUplata(parseFloat(e.target.value))}/> €
                 </div>
-            ))}
+                <div className="total-tecaj">
+                    <strong>Tecaj:</strong> {calculateTecaj()}
+
+                </div>
+                <div className="isplata">
+                    <strong>Isplata:</strong> {((calculateTecaj() * uplata) || 0).toFixed(2)} €
+                </div>
+                <button className="pay-button" onClick={() => handlePay()}>Pripremi Uplatu</button>
+            </div>
         </div>
     );
 };

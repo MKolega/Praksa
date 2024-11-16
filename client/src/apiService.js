@@ -45,6 +45,18 @@ export const passwordReset = async (username, password) => {
     return response.json();
 }
 
+export const deleteUser = async (id) => {
+    const response = await fetch(`${BASE_URL}/players`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+    });
+    if (!response.ok) {
+        throw new Error(`Error deleting user: ${response.statusText}`);
+    }
+    return response.json();
+}
+
 export const loginUser = async (username, password) => {
     const response = await fetch(`${BASE_URL}/login`, {
         method: 'POST',
