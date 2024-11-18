@@ -1,4 +1,4 @@
-module Praksa
+module github.com/MKolega/Praksa
 
 go 1.22.0
 

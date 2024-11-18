@@ -1,32 +1,14 @@
-package main
+package storage
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/MKolega/Praksa/internal/shared"
 	"github.com/lib/pq"
 	"log"
 	"strconv"
 )
-
-type Storage interface {
-	CreatePonuda(*Ponude) error
-	CreateTecaj(ponudaID int, tecaj float64, naziv string) error
-	GetPonuda(id int) (*Ponude, error)
-	GetAllPonude() ([]*Ponude, error)
-	CreateLiga(naziv string) (int, error)
-	CreateRazrada(ligaID int, ponude []int) (int, error)
-	CreateTipovi(razradaID int, naziv string) error
-	GetLige() ([]*Lige, error)
-	CreatePlayer(*Player) error
-	GetPlayers() ([]*Player, error)
-	GetPlayerByID(id int) (*Player, error)
-	GetLogin(username string) (*Player, error)
-	ResetPassword(username string, newPassword string) error
-	DeleteUser(id int) error
-	Deposit(id int, amount float64) error
-	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
-}
 
 type PostGresStore struct {
 	db *sql.DB
@@ -110,7 +92,7 @@ func (s *PostGresStore) createPlayerTable() error {
 	return err
 }
 
-func (s *PostGresStore) CreatePlayer(player *Player) error {
+func (s *PostGresStore) CreatePlayer(player *shared.Player) error {
 	query := "INSERT INTO Player (username, password, account_balance) VALUES ($1, $2, $3)"
 	resp, err := s.db.Query(query,
 		player.Username, player.Password, player.AccountBalance)
@@ -161,7 +143,7 @@ func (s *PostGresStore) CreateTipovi(razradaID int, naziv string) error {
 
 	return nil
 }
-func (s *PostGresStore) GetLige() ([]*Lige, error) {
+func (s *PostGresStore) GetLige() ([]*shared.Lige, error) {
 	rows, err := s.db.Query(`
 		SELECT l.naziv AS liga_naziv,
 		       r.ponude AS ponude,
@@ -181,7 +163,7 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 		}
 	}(rows)
 
-	ligaMap := make(map[string]*Lige)
+	ligaMap := make(map[string]*shared.Lige)
 
 	for rows.Next() {
 		var ligaNaziv string
@@ -194,9 +176,9 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 
 		// Initialize liga
 		if _, exists := ligaMap[ligaNaziv]; !exists {
-			ligaMap[ligaNaziv] = &Lige{
+			ligaMap[ligaNaziv] = &shared.Lige{
 				Naziv:   ligaNaziv,
-				Razrade: []Razrade{{Tipovi: []Tipovi{}, Ponude: []int{}}},
+				Razrade: []shared.Razrade{{Tipovi: []shared.Tipovi{}, Ponude: []int{}}},
 			}
 		}
 
@@ -204,12 +186,12 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 
 		// Initialize razrade
 		if len(liga.Razrade) == 0 {
-			liga.Razrade = append(liga.Razrade, Razrade{Tipovi: []Tipovi{}, Ponude: []int{}})
+			liga.Razrade = append(liga.Razrade, shared.Razrade{Tipovi: []shared.Tipovi{}, Ponude: []int{}})
 		}
 
 		// Add tipovi
 		if tipNaziv.Valid {
-			tip := Tipovi{Naziv: tipNaziv.String}
+			tip := shared.Tipovi{Naziv: tipNaziv.String}
 			liga.Razrade[0].Tipovi = append(liga.Razrade[0].Tipovi, tip) // Add tip to the first Razrada
 		}
 
@@ -225,7 +207,7 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 		return nil, err
 	}
 
-	var ligas []*Lige
+	var ligas []*shared.Lige
 	for _, liga := range ligaMap {
 		ligas = append(ligas, liga) // Add Liga to the final slice
 	}
@@ -233,7 +215,7 @@ func (s *PostGresStore) GetLige() ([]*Lige, error) {
 	return ligas, nil
 }
 
-func (s *PostGresStore) CreatePonuda(ponude *Ponude) error {
+func (s *PostGresStore) CreatePonuda(ponude *shared.Ponude) error {
 	query := "INSERT INTO ponude (broj,id ,naziv,tv_kanal,vrijeme,ima_statistiku) VALUES ($1, $2, $3, $4, $5, $6)"
 	resp, err := s.db.Query(query,
 		ponude.Broj,
@@ -264,15 +246,15 @@ func (s *PostGresStore) CreateTecaj(ponudaID int, tecaj float64, naziv string) e
 	return nil
 }
 
-func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
+func (s *PostGresStore) GetPonuda(id int) (*shared.Ponude, error) {
 	rows, err := s.db.Query(`SELECT p.id, p.broj, p.naziv, p.vrijeme, p.tv_kanal, p.ima_statistiku, t.tecaj, t.naziv FROM ponude p LEFT JOIN tecajevi t ON p.id = t.ponuda_id WHERE p.id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
-	ponuda := new(Ponude)
-	ponuda.Tecajevi = []Tecajevi{}
+	ponuda := new(shared.Ponude)
+	ponuda.Tecajevi = []shared.Tecajevi{}
 	for rows.Next() {
-		var tecaj Tecajevi
+		var tecaj shared.Tecajevi
 		err := rows.Scan(
 			&ponuda.ID,
 			&ponuda.Broj,
@@ -295,7 +277,7 @@ func (s *PostGresStore) GetPonuda(id int) (*Ponude, error) {
 	return ponuda, nil
 }
 
-func (s *PostGresStore) GetAllPonude() ([]*Ponude, error) {
+func (s *PostGresStore) GetAllPonude() ([]*shared.Ponude, error) {
 	rows, err := s.db.Query(`
 		SELECT p.id, p.broj, p.naziv, p.vrijeme, p.tv_kanal, p.ima_statistiku, t.tecaj, t.naziv 
 		FROM ponude p 
@@ -312,12 +294,12 @@ func (s *PostGresStore) GetAllPonude() ([]*Ponude, error) {
 		}
 	}(rows)
 
-	ponudeMap := make(map[string]*Ponude)
+	ponudeMap := make(map[string]*shared.Ponude)
 
 	for rows.Next() {
 		var id int
-		var tecaj Tecajevi
-		ponuda := Ponude{}
+		var tecaj shared.Tecajevi
+		ponuda := shared.Ponude{}
 
 		err := rows.Scan(
 			&id,
@@ -339,12 +321,12 @@ func (s *PostGresStore) GetAllPonude() ([]*Ponude, error) {
 		} else {
 
 			ponuda.ID = id
-			ponuda.Tecajevi = []Tecajevi{tecaj}
+			ponuda.Tecajevi = []shared.Tecajevi{tecaj}
 			ponudeMap[strconv.Itoa(id)] = &ponuda
 		}
 	}
 
-	ponude := make([]*Ponude, 0, len(ponudeMap))
+	ponude := make([]*shared.Ponude, 0, len(ponudeMap))
 	for _, ponuda := range ponudeMap {
 		ponude = append(ponude, ponuda)
 	}
@@ -352,14 +334,14 @@ func (s *PostGresStore) GetAllPonude() ([]*Ponude, error) {
 	return ponude, nil
 }
 
-func (s *PostGresStore) GetPlayers() ([]*Player, error) {
+func (s *PostGresStore) GetPlayers() ([]*shared.Player, error) {
 
 	rows, err := s.db.Query(`SELECT * FROM Player`)
 	if err != nil {
 		return nil, err
 
 	}
-	var players []*Player
+	var players []*shared.Player
 	for rows.Next() {
 		player, err := scanIntoPlayer(rows)
 		if err != nil {
@@ -390,7 +372,7 @@ func (s *PostGresStore) DeleteUser(id int) error {
 	}
 	return nil
 }
-func (s *PostGresStore) GetLogin(username string) (*Player, error) {
+func (s *PostGresStore) GetLogin(username string) (*shared.Player, error) {
 	rows, err := s.db.Query(`SELECT * FROM Player WHERE username = $1`, username)
 	if err != nil {
 		return nil, err
@@ -403,7 +385,7 @@ func (s *PostGresStore) GetLogin(username string) (*Player, error) {
 
 }
 
-func (s *PostGresStore) GetPlayerByID(id int) (*Player, error) {
+func (s *PostGresStore) GetPlayerByID(id int) (*shared.Player, error) {
 	rows, err := s.db.Query(`SELECT * FROM Player WHERE id = $1`, id)
 	if err != nil {
 		return nil, err
@@ -417,8 +399,8 @@ func (s *PostGresStore) GetPlayerByID(id int) (*Player, error) {
 
 }
 
-func scanIntoPlayer(rows *sql.Rows) (*Player, error) {
-	player := new(Player)
+func scanIntoPlayer(rows *sql.Rows) (*shared.Player, error) {
+	player := new(shared.Player)
 	err := rows.Scan(
 		&player.ID,
 		&player.Username,
@@ -438,7 +420,7 @@ func (s *PostGresStore) Deposit(id int, amount float64) error {
 	return nil
 }
 
-func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []OdigraniPar) error {
+func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []shared.OdigraniPar) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
