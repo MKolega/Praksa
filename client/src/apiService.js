@@ -71,34 +71,6 @@ export const loginUser = async (username, password) => {
     return response.json();
 };
 
-export const getPlayers = async () => {
-    const response = await fetch(`${BASE_URL}/players`);
-    if (!response.ok) {
-        throw new Error(`Error fetching players: ${response.statusText}`);
-    }
-    return response.json();
-};
-
-export const getPlayerById = async (id) => {
-    const response = await fetch(`${BASE_URL}/players/${id}`);
-    if (!response.ok) {
-        throw new Error(`Error fetching player ${id}: ${response.statusText}`);
-    }
-    return response.json();
-};
-
-export const createPonuda = async (data) => {
-    const response = await fetch(`${BASE_URL}/ponude`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-        throw new Error(`Error creating ponuda: ${response.statusText}`);
-    }
-    return response.json();
-};
-
 export const deposit = async (id, amount) => {
     const response = await fetch(`${BASE_URL}/deposit/${id}`, {
         method: 'POST',

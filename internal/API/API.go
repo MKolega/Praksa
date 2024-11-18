@@ -1,8 +1,9 @@
-package main
+package API
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/MKolega/Praksa/internal/shared"
 	"github.com/gorilla/mux"
 	"io"
 	"log"
@@ -12,7 +13,7 @@ import (
 
 type APIServer struct {
 	listenAddr string
-	store      Storage
+	store      shared.Storage
 }
 
 type APIError struct {
@@ -20,7 +21,7 @@ type APIError struct {
 }
 type apiFunc func(http.ResponseWriter, *http.Request) error
 
-func NewApiServer(listenAddr string, store Storage) *APIServer {
+func NewApiServer(listenAddr string, store shared.Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
@@ -101,7 +102,7 @@ func (s *APIServer) InsertLigeData(url string) error {
 		}
 	}(r.Body)
 
-	var jsonData JsonData
+	var jsonData shared.JsonData
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&jsonData); err != nil {
 		return fmt.Errorf("failed to decode JSON: %v", err)
@@ -148,7 +149,7 @@ func (s *APIServer) InsertPonudeData(url string) error {
 		}
 	}(r.Body)
 
-	var jsonData []Ponude
+	var jsonData []shared.Ponude
 	if err := json.NewDecoder(r.Body).Decode(&jsonData); err != nil {
 		return fmt.Errorf("failed to decode JSON: %v", err)
 	}
@@ -207,11 +208,11 @@ func (s *APIServer) handlePonude(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) error {
-	createPlayerReq := new(CreatePlayerRequest)
+	createPlayerReq := new(shared.CreatePlayerRequest)
 	if err := json.NewDecoder(r.Body).Decode(createPlayerReq); err != nil {
 		return err
 	}
-	player := NewPlayer(createPlayerReq.Username, createPlayerReq.Password)
+	player := shared.NewPlayer(createPlayerReq.Username, createPlayerReq.Password)
 	if err := s.store.CreatePlayer(player); err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) err
 }
 
 func (s *APIServer) handlePasswordReset(w http.ResponseWriter, r *http.Request) error {
-	resetRequest := new(CreatePlayerRequest)
+	resetRequest := new(shared.CreatePlayerRequest)
 	if err := json.NewDecoder(r.Body).Decode(resetRequest); err != nil {
 		return err
 	}
@@ -264,10 +265,11 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
-	loginReq := new(Player)
+	loginReq := new(shared.Player)
 	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
 		return err
 	}
+
 	player, err := s.store.GetLogin(loginReq.Username)
 	if err != nil {
 		return err
@@ -292,12 +294,12 @@ func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) error {
-	createPonudaReq := new(CreatePonudaRequest)
+	createPonudaReq := new(shared.CreatePonudaRequest)
 	if err := json.NewDecoder(r.Body).Decode(createPonudaReq); err != nil {
 		return err
 	}
 
-	ponuda := NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme, createPonudaReq.TvKanal, createPonudaReq.ImaStatistiku)
+	ponuda := shared.NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme, createPonudaReq.TvKanal, createPonudaReq.ImaStatistiku)
 	if err := s.store.CreatePonuda(ponuda); err != nil {
 		return err
 	}
@@ -316,7 +318,7 @@ func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	uplataReq := new(CreateUplataRequest)
+	uplataReq := new(shared.CreateUplataRequest)
 	if err := json.NewDecoder(r.Body).Decode(&uplataReq); err != nil {
 		return err
 	}
@@ -334,7 +336,7 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	depositRequest := new(DepositRequest)
+	depositRequest := new(shared.DepositRequest)
 
 	if err := json.NewDecoder(r.Body).Decode(&depositRequest); err != nil {
 		return err
