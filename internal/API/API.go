@@ -31,19 +31,19 @@ func NewApiServer(listenAddr string, store shared.Storage) *APIServer {
 func (s *APIServer) Run() {
 
 	ligeURL := "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/lige.json"
-	err := s.InsertLigeData(ligeURL)
+	err := s.FetchAndInsertLigeDataToDB(ligeURL)
 	if err != nil {
 		log.Fatal("failed to insert lige data: ", err)
 	}
 	ponudeURL := "https://minus5-dev-test.s3.eu-central-1.amazonaws.com/ponude.json"
-	err = s.InsertPonudeData(ponudeURL)
+	err = s.FetchAndInsertPonudeDataToDB(ponudeURL)
 	if err != nil {
 		log.Fatal("failed to insert ponude data: ", err)
 	}
 
 	router := mux.NewRouter()
 	router.Use(enableCors)
-	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.ligeRequest))
+	router.HandleFunc("/api/lige", makeHTTPHandlefunc(s.HandleGetLige))
 	router.HandleFunc("/api/players", makeHTTPHandlefunc(s.handlePlayer))
 	router.HandleFunc("/api/players/{id:[0-9]+}", makeHTTPHandlefunc(s.handleGetPlayerByID))
 	router.HandleFunc("/api/login", makeHTTPHandlefunc(s.handleLogin))
@@ -89,88 +89,90 @@ func makeHTTPHandlefunc(f apiFunc) http.HandlerFunc {
 	}
 }
 
-func (s *APIServer) InsertLigeData(url string) error {
-
+func (s *APIServer) FetchData(url string, decodeFunc func(io.Reader) error) error {
 	r, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to fetch data from %s: %v", url, err)
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println("failed to close response", err)
+		if err := Body.Close(); err != nil {
+			log.Println("failed to close response body:", err)
 		}
 	}(r.Body)
 
-	var jsonData shared.JsonData
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&jsonData); err != nil {
-		return fmt.Errorf("failed to decode JSON: %v", err)
+	if err := decodeFunc(r.Body); err != nil {
+		return fmt.Errorf("failed to decode or process data from %s: %v", url, err)
 	}
 
-	for _, liga := range jsonData.Lige {
-		ligaID, err := s.store.CreateLiga(liga.Naziv)
-		if err != nil {
-			log.Printf("failed to insert liga %s: %v", liga.Naziv, err)
-			continue
+	log.Printf("Successfully processed data from %s.", url)
+	return nil
+}
+
+func (s *APIServer) FetchAndInsertLigeDataToDB(url string) error {
+
+	decodeFunc := func(body io.Reader) error {
+		var jsonData shared.JsonData
+		if err := json.NewDecoder(body).Decode(&jsonData); err != nil {
+			return fmt.Errorf("failed to decode Lige JSON: %v", err)
 		}
 
-		for _, razrada := range liga.Razrade {
-			razradaID, err := s.store.CreateRazrada(ligaID, razrada.Ponude)
+		for _, liga := range jsonData.Lige {
+			ligaID, err := s.store.CreateLiga(liga.Naziv)
 			if err != nil {
-				log.Printf("failed to insert razrada for liga %s: %v", liga.Naziv, err)
+				log.Printf("failed to insert liga %s: %v", liga.Naziv, err)
 				continue
 			}
 
-			for _, tip := range razrada.Tipovi {
-				err := s.store.CreateTipovi(razradaID, tip.Naziv)
+			for _, razrada := range liga.Razrade {
+				razradaID, err := s.store.CreateRazrada(ligaID, razrada.Ponude)
 				if err != nil {
-					log.Printf("failed to insert tip %s for razrada %d: %v", tip.Naziv, razradaID, err)
+					log.Printf("failed to insert razrada for liga %s: %v", liga.Naziv, err)
+					continue
+				}
 
+				for _, tip := range razrada.Tipovi {
+					err := s.store.CreateTipovi(razradaID, tip.Naziv)
+					if err != nil {
+						log.Printf("failed to insert tip %s for razrada %d: %v", tip.Naziv, razradaID, err)
+
+					}
 				}
 			}
 		}
-	}
-	log.Println("Successfully updated Lige data.")
+		log.Println("Successfully updated Lige data.")
 
-	return nil
+		return nil
+	}
+	return s.FetchData(url, decodeFunc)
 }
 
-func (s *APIServer) InsertPonudeData(url string) error {
-	r, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to fetch data from %s: %v", url, err)
-
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Println("failed to close response", err)
-		}
-	}(r.Body)
-
-	var jsonData []shared.Ponude
-	if err := json.NewDecoder(r.Body).Decode(&jsonData); err != nil {
-		return fmt.Errorf("failed to decode JSON: %v", err)
-	}
-	for _, ponuda := range jsonData {
-		if err := s.store.CreatePonuda(&ponuda); err != nil {
-			log.Printf("failed to insert ponuda with ID %d: %v", ponuda.ID, err)
-			continue
+func (s *APIServer) FetchAndInsertPonudeDataToDB(url string) error {
+	decodeFunc := func(body io.Reader) error {
+		var jsonData []shared.Ponude
+		if err := json.NewDecoder(body).Decode(&jsonData); err != nil {
+			return fmt.Errorf("failed to decode Ponude JSON: %v", err)
 		}
 
-		for _, tecaj := range ponuda.Tecajevi {
-			if err := s.store.CreateTecaj(ponuda.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
-				log.Printf("failed to insert tecaj '%s' for ponuda ID %d: %v", tecaj.Naziv, ponuda.ID, err)
+		for _, ponuda := range jsonData {
+			if err := s.store.CreatePonuda(&ponuda); err != nil {
+				log.Printf("failed to insert ponuda with ID %d: %v", ponuda.ID, err)
+				continue
+			}
+
+			for _, tecaj := range ponuda.Tecajevi {
+				if err := s.store.CreateTecaj(ponuda.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
+					log.Printf("failed to insert tecaj '%s' for ponuda ID %d: %v", tecaj.Naziv, ponuda.ID, err)
+				}
 			}
 		}
-	}
 
-	log.Println("Successfully updated Ponude data.")
-	return nil
+		log.Println("Successfully updated Ponude data.")
+		return nil
+	}
+	return s.FetchData(url, decodeFunc)
 }
 
-func (s *APIServer) ligeRequest(w http.ResponseWriter, _ *http.Request) error {
+func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error {
 	lige, err := s.store.GetLige()
 
 	if err != nil {
