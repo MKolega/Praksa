@@ -1,7 +1,9 @@
 package API
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/MKolega/Praksa/internal/shared"
 	"github.com/gorilla/mux"
@@ -19,7 +21,6 @@ type APIServer struct {
 type APIError struct {
 	Error string `json:"error"`
 }
-type apiFunc func(http.ResponseWriter, *http.Request) error
 
 func NewApiServer(listenAddr string, store shared.Storage) *APIServer {
 	return &APIServer{
@@ -81,10 +82,28 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(v)
 }
-func makeHTTPHandlefunc(f apiFunc) http.HandlerFunc {
+
+func makeHTTPHandlefunc(handlerFunc func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := f(w, r); err != nil {
-			_ = WriteJSON(w, http.StatusBadRequest, APIError{Error: err.Error()})
+
+		err := handlerFunc(w, r)
+
+		if err != nil {
+
+			switch e := err.(type) {
+			case *shared.UserError:
+
+				log.Printf("Bad request: %v", err)
+				_ = WriteJSON(w, http.StatusBadRequest, APIError{Error: e.Message})
+			case *shared.InternalError:
+
+				log.Printf("Internal server error: %v", err)
+				_ = WriteJSON(w, http.StatusInternalServerError, APIError{Error: e.Message})
+			default:
+
+				log.Printf("Unexpected error: %v", err)
+				_ = WriteJSON(w, http.StatusInternalServerError, APIError{Error: "Unexpected error"})
+			}
 		}
 	}
 }
@@ -176,7 +195,7 @@ func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error 
 	lige, err := s.store.GetLige()
 
 	if err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get lige: %v", err)}
 	}
 	return WriteJSON(w, http.StatusOK, lige)
 }
@@ -212,11 +231,11 @@ func (s *APIServer) handlePonude(w http.ResponseWriter, r *http.Request) error {
 func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) error {
 	createPlayerReq := new(shared.CreatePlayerRequest)
 	if err := json.NewDecoder(r.Body).Decode(createPlayerReq); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode player data: %v", err)}
 	}
 	player := shared.NewPlayer(createPlayerReq.Username, createPlayerReq.Password)
 	if err := s.store.CreatePlayer(player); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to create player: %v", err)}
 	}
 	return WriteJSON(w, http.StatusCreated, player)
 }
@@ -224,7 +243,7 @@ func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) e
 func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) error {
 	player, err := s.store.GetPlayers()
 	if err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get players: %v", err)}
 	}
 
 	return WriteJSON(w, http.StatusOK, player)
@@ -234,10 +253,10 @@ func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) err
 func (s *APIServer) handlePasswordReset(w http.ResponseWriter, r *http.Request) error {
 	resetRequest := new(shared.CreatePlayerRequest)
 	if err := json.NewDecoder(r.Body).Decode(resetRequest); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode player data: %v", err)}
 	}
 	if err := s.store.ResetPassword(resetRequest.Username, resetRequest.Password); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to reset password: %v", err)}
 	}
 	return WriteJSON(w, http.StatusOK, resetRequest)
 }
@@ -245,11 +264,11 @@ func (s *APIServer) handlePasswordReset(w http.ResponseWriter, r *http.Request) 
 func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
 
 	if err := s.store.DeleteUser(id); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to delete user: %v", err)}
 	}
 	return WriteJSON(w, http.StatusOK, id)
 
@@ -257,11 +276,14 @@ func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) err
 func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
 	player, err := s.store.GetPlayerByID(id)
 	if err != nil {
-		return err
+		if errors.Is(err, sql.ErrNoRows) {
+			return &shared.UserError{Message: fmt.Sprintf("Player with ID %d not found: %v", id, err)}
+		}
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get player by id %d: %v", id, err)}
 	}
 	return WriteJSON(w, http.StatusOK, player)
 }
@@ -269,12 +291,16 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	loginReq := new(shared.Player)
 	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode login data: %v", err)}
 	}
 
 	player, err := s.store.GetLogin(loginReq.Username)
 	if err != nil {
-		return err
+		if errors.Is(err, sql.ErrNoRows) {
+			return &shared.UserError{Message: fmt.Sprintf("Player with username %s not found", loginReq.Username)}
+		}
+
+		return &shared.InternalError{Message: fmt.Sprintf("Login failed with username: %v", err)}
 	}
 	if player.Password == loginReq.Password {
 		return WriteJSON(w, http.StatusOK, player)
@@ -286,11 +312,14 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("invalid ponuda id: %v", err)}
 	}
 	ponuda, err := s.store.GetPonuda(id)
 	if err != nil {
-		return err
+		if errors.Is(err, sql.ErrNoRows) {
+			return &shared.UserError{Message: fmt.Sprintf("ponuda with id %d not found", id)}
+		}
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get ponuda by id %d: %v", id, err)}
 	}
 	return WriteJSON(w, http.StatusOK, ponuda)
 }
@@ -298,17 +327,17 @@ func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) erro
 func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) error {
 	createPonudaReq := new(shared.CreatePonudaRequest)
 	if err := json.NewDecoder(r.Body).Decode(createPonudaReq); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode ponuda data: %v", err)}
 	}
 
 	ponuda := shared.NewPonuda(createPonudaReq.Broj, createPonudaReq.ID, createPonudaReq.Naziv, createPonudaReq.Vrijeme, createPonudaReq.TvKanal, createPonudaReq.ImaStatistiku)
 	if err := s.store.CreatePonuda(ponuda); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to create ponuda: %v", err)}
 	}
 
 	for _, tecaj := range createPonudaReq.Tecajevi {
 		if err := s.store.CreateTecaj(createPonudaReq.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
-			return err
+			return &shared.InternalError{Message: fmt.Sprintf("failed to create tecaj: %v", err)}
 		}
 	}
 
@@ -317,16 +346,16 @@ func (s *APIServer) handleCreatePonuda(w http.ResponseWriter, r *http.Request) e
 func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 	playerID, err := getID(r)
 	if err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
 
 	uplataReq := new(shared.CreateUplataRequest)
 	if err := json.NewDecoder(r.Body).Decode(&uplataReq); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode uplata data: %v", err)}
 	}
 
 	if err := s.store.CreateUplata(playerID, uplataReq.Amount, uplataReq.OdigraniPar); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to create uplata: %v", err)}
 	}
 
 	return WriteJSON(w, http.StatusOK, uplataReq)
@@ -336,15 +365,15 @@ func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error {
 	id, err := getID(r)
 	if err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
 	depositRequest := new(shared.DepositRequest)
 
 	if err := json.NewDecoder(r.Body).Decode(&depositRequest); err != nil {
-		return err
+		return &shared.UserError{Message: fmt.Sprintf("failed to decode deposit data: %v", err)}
 	}
 	if err := s.store.Deposit(id, depositRequest.Amount); err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to deposit: %v", err)}
 	}
 	return WriteJSON(w, http.StatusOK, depositRequest)
 }
@@ -352,7 +381,7 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, _ *http.Request) error {
 	ponude, err := s.store.GetAllPonude()
 	if err != nil {
-		return err
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get ponude: %v", err)}
 	}
 	return WriteJSON(w, http.StatusOK, ponude)
 }
