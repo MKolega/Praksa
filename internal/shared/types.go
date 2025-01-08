@@ -19,6 +19,22 @@ type Storage interface {
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
 
+type UserError struct {
+	Message string
+}
+
+func (e *UserError) Error() string {
+	return e.Message
+}
+
+type InternalError struct {
+	Message string
+}
+
+func (e *InternalError) Error() string {
+	return e.Message
+}
+
 type Lige struct {
 	Naziv   string    `json:"naziv"`
 	Razrade []Razrade `json:"razrade"`
