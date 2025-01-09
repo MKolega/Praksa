@@ -203,31 +203,29 @@ func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error 
 }
 
 func (s *APIServer) handlePlayer(w http.ResponseWriter, r *http.Request) error {
-	if r.Method == "GET" {
+	switch r.Method {
+	case "GET":
 		return s.handleGetPlayers(w, r)
-	}
-	if r.Method == "POST" {
+	case "POST":
 		return s.handleCreatePlayer(w, r)
-
-	}
-	if r.Method == "PUT" {
+	case "PUT":
 		return s.handlePasswordReset(w, r)
-	}
-	if r.Method == "DELETE" {
+	case "DELETE":
 		return s.handleDeleteUser(w, r)
+	default:
+		return fmt.Errorf("method not allowed %s", r.Method)
 	}
-
-	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
 func (s *APIServer) handlePonude(w http.ResponseWriter, r *http.Request) error {
-	if r.Method == "GET" {
+	switch r.Method {
+	case "GET":
 		return s.handeGetAllPonude(w, r)
-	}
-	if r.Method == "POST" {
+	case "POST":
 		return s.handleCreatePonuda(w, r)
+	default:
+		return fmt.Errorf("method not allowed %s", r.Method)
 	}
-	return fmt.Errorf("method not allowed %s", r.Method)
 }
 
 func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) error {
