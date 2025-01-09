@@ -3,22 +3,24 @@ package shared
 type Storage interface {
 	CreatePonuda(*Ponude) error
 	CreateTecaj(ponudaID int, tecaj float64, naziv string) error
-	GetPonuda(id int) (*Ponude, error)
-	GetAllPonude() ([]*Ponude, error)
 	CreateLiga(naziv string) (int, error)
 	CreateRazrada(ligaID int, ponude []int) (int, error)
 	CreateTipovi(razradaID int, naziv string) error
-	GetLige() ([]*Lige, error)
 	CreatePlayer(*Player) error
-	GetPlayers() ([]*Player, error)
-	GetPlayerByID(id int) (*Player, error)
-	GetLogin(username string) (*Player, error)
 	ResetPassword(username string, newPassword string) error
 	DeleteUser(id int) error
 	Deposit(id int, amount float64) error
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 }
 
+type Get interface {
+	GetPonuda(id int) (*Ponude, error)
+	GetAllPonude() ([]*Ponude, error)
+	GetLige() ([]*Lige, error)
+	GetPlayers() ([]*Player, error)
+	GetPlayerByID(id int) (*Player, error)
+	GetLogin(username string) (*Player, error)
+}
 type UserError struct {
 	Message string
 }

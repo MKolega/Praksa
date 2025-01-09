@@ -16,16 +16,18 @@ import (
 type APIServer struct {
 	listenAddr string
 	store      shared.Storage
+	get        shared.Get
 }
 
 type APIError struct {
 	Error string `json:"error"`
 }
 
-func NewApiServer(listenAddr string, store shared.Storage) *APIServer {
+func NewApiServer(listenAddr string, store shared.Storage, get shared.Get) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
+		get:        get,
 	}
 }
 
@@ -192,7 +194,7 @@ func (s *APIServer) FetchAndInsertPonudeDataToDB(url string) error {
 }
 
 func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error {
-	lige, err := s.store.GetLige()
+	lige, err := s.get.GetLige()
 
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get lige: %v", err)}
@@ -241,7 +243,7 @@ func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) e
 }
 
 func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) error {
-	player, err := s.store.GetPlayers()
+	player, err := s.get.GetPlayers()
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get players: %v", err)}
 	}
@@ -278,7 +280,7 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
-	player, err := s.store.GetPlayerByID(id)
+	player, err := s.get.GetPlayerByID(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("Player with ID %d not found: %v", id, err)}
@@ -294,7 +296,7 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return &shared.UserError{Message: fmt.Sprintf("failed to decode login data: %v", err)}
 	}
 
-	player, err := s.store.GetLogin(loginReq.Username)
+	player, err := s.get.GetLogin(loginReq.Username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("Player with username %s not found", loginReq.Username)}
@@ -314,7 +316,7 @@ func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return &shared.UserError{Message: fmt.Sprintf("invalid ponuda id: %v", err)}
 	}
-	ponuda, err := s.store.GetPonuda(id)
+	ponuda, err := s.get.GetPonuda(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("ponuda with id %d not found", id)}
@@ -379,7 +381,7 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, _ *http.Request) error {
-	ponude, err := s.store.GetAllPonude()
+	ponude, err := s.get.GetAllPonude()
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get ponude: %v", err)}
 	}
