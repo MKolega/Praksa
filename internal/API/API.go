@@ -334,6 +334,19 @@ func (s *APIServer) handleUplata(w http.ResponseWriter, r *http.Request) error {
 		return &shared.UserError{Message: fmt.Sprintf("failed to decode uplata data: %v", err)}
 	}
 
+	var currentBalance, _ = s.store.GetAccountBalance(playerID)
+	if uplataReq.Amount > currentBalance {
+		return &shared.UserError{Message: fmt.Sprintf("insufficient funds: %v", err)}
+	}
+
+	tecajevi, err := s.store.GetTecaj(uplataReq.OdigraniPar)
+	if err != nil {
+		return &shared.InternalError{Message: fmt.Sprintf("failed to get tecaj: %v", err)}
+	}
+	if tecajevi == nil {
+		return &shared.InternalError{Message: "no tecajevi found for the given par"}
+	}
+
 	if err := s.store.CreateUplata(playerID, uplataReq.Amount, uplataReq.OdigraniPar); err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to create uplata: %v", err)}
 	}

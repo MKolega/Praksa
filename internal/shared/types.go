@@ -17,6 +17,9 @@ type Storage interface {
 	DeleteUser(id int) error
 	Deposit(id int, amount float64) error
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
+	GetAccountBalance(id int) (float64, error)
+	GetPonudaByID(id int) (*Ponude, error)
+	GetTecaj(parovi []OdigraniPar) ([]*OdigraniPar, error)
 }
 
 type UserError struct {

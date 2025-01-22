@@ -40,7 +40,7 @@ func (s *PostGresStore) createPlayerTable() error {
 			account_balance DECIMAL(10, 2) NOT NULL
 		);
 		
-		CREATE TABLE IF NOT EXISTS player_ponude (
+		CREATE TABLE IF NOT EXISTS player_bets (
 			id SERIAL PRIMARY KEY,
 			player_id INT NOT NULL,
 			ponuda_id INT NOT NULL,
@@ -364,7 +364,7 @@ func (s *PostGresStore) ResetPassword(username string, newPassword string) error
 
 func (s *PostGresStore) DeleteUser(id int) error {
 	_, err := s.db.Exec(`
-    DELETE FROM player_ponude WHERE player_id = $1;
+    DELETE FROM player_bets WHERE player_id = $1;
     DELETE FROM Player WHERE id = $1;
 `, id)
 	if err != nil {
@@ -432,27 +432,7 @@ func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []shar
 		}
 	}(tx) // Rollback in case of error
 
-	var currentBalance float64
-	err = tx.QueryRow(`SELECT account_balance FROM player WHERE id = $1`, playerID).Scan(&currentBalance)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("player with ID %d does not exist", playerID)
-		}
-		return err
-	}
-	if currentBalance < amount {
-		return fmt.Errorf("player with ID %d does not have enough funds", playerID)
-	}
-
 	for _, par := range parovi {
-		var ponudaID int
-		err = tx.QueryRow(`SELECT id FROM ponude WHERE id = $1`, par.Ponuda).Scan(&ponudaID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("ponuda with ID %d does not exist", par.Ponuda)
-			}
-		}
-
 		var tecaj float64
 		err = tx.QueryRow(`SELECT tecaj FROM tecajevi WHERE ponuda_id = $1 AND naziv = $2`, par.Ponuda, par.NazivTipa).Scan(&tecaj)
 		if err != nil {
@@ -460,12 +440,10 @@ func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []shar
 				return fmt.Errorf("tecaj for ponuda with ID %d and tip %s does not exist", par.Ponuda, par.NazivTipa)
 			}
 		}
-
 		if amount*tecaj > 1000 {
 			return fmt.Errorf("winning amount is over 1000€")
 		}
-
-		_, err = tx.Exec(`INSERT INTO player_ponude (player_id, ponuda_id, tip,tecaj,iznos_uloga) VALUES ($1, $2, $3, $4, $5)`, playerID, par.Ponuda, par.NazivTipa, tecaj, amount)
+		_, err = tx.Exec(`INSERT INTO player_bets (player_id, ponuda_id, tip,tecaj,iznos_uloga) VALUES ($1, $2, $3, $4, $5)`, playerID, par.Ponuda, par.NazivTipa, tecaj, amount)
 		if err != nil {
 			return err
 		}
@@ -476,4 +454,70 @@ func (s *PostGresStore) CreateUplata(playerID int, amount float64, parovi []shar
 	}
 
 	return nil
+}
+
+func (s *PostGresStore) GetAccountBalance(id int) (float64, error) {
+	var balance float64
+	err := s.db.QueryRow(`SELECT account_balance FROM player WHERE id = $1`, id).Scan(&balance)
+	if err != nil {
+		return 0, err
+	}
+	return balance, nil
+
+}
+
+func (s *PostGresStore) GetPonudaByID(id int) (*shared.Ponude, error) {
+	rows, err := s.db.Query(`SELECT * FROM ponude WHERE id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	ponuda := new(shared.Ponude)
+	for rows.Next() {
+		err := rows.Scan(
+			&ponuda.ID,
+			&ponuda.Broj,
+			&ponuda.Naziv,
+			&ponuda.Vrijeme,
+			&ponuda.TvKanal,
+			&ponuda.ImaStatistiku,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if ponuda.ID == 0 {
+		return nil, fmt.Errorf("ponuda with id %d not found", id)
+	}
+	return ponuda, nil
+
+}
+
+func (s *PostGresStore) GetTecaj(parovi []shared.OdigraniPar) ([]*shared.Tecajevi, error) {
+	var tecajevi []*shared.Tecajevi
+
+	for _, par := range parovi {
+		rows, err := s.db.Query(
+			`SELECT tecaj, naziv FROM tecajevi WHERE ponuda_id = $1 AND naziv = $2`,
+			par.Ponuda, par.NazivTipa,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch tecajevi for ponuda_id %d and naziv %s: %v", par.Ponuda, par.NazivTipa, err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			tecaj := new(shared.Tecajevi)
+			err := rows.Scan(&tecaj.Tecaj, &tecaj.Naziv)
+			if err != nil {
+				return nil, fmt.Errorf("failed to scan tecajevi row: %v", err)
+			}
+			tecajevi = append(tecajevi, tecaj)
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating over tecajevi rows: %v", err)
+		}
+	}
+
+	return tecajevi, nil
 }
