@@ -19,7 +19,7 @@ type Storage interface {
 	CreateUplata(playerID int, amount float64, odigraniPar []OdigraniPar) error
 	GetAccountBalance(id int) (float64, error)
 	GetPonudaByID(id int) (*Ponude, error)
-	GetTecaj(parovi []OdigraniPar) ([]*OdigraniPar, error)
+	GetTecaj(parovi []OdigraniPar) ([]*Tecajevi, error)
 }
 
 type UserError struct {
