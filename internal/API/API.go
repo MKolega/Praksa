@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MKolega/Praksa/internal/client"
 	"github.com/MKolega/Praksa/internal/shared"
 	"github.com/gorilla/mux"
 	"io"
@@ -16,18 +17,16 @@ import (
 type APIServer struct {
 	listenAddr string
 	store      shared.Storage
-	get        shared.Get
 }
 
 type APIError struct {
 	Error string `json:"error"`
 }
 
-func NewApiServer(listenAddr string, store shared.Storage, get shared.Get) *APIServer {
+func NewApiServer(listenAddr string, store shared.Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
-		get:        get,
 	}
 }
 
@@ -110,25 +109,6 @@ func makeHTTPHandlefunc(handlerFunc func(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (s *APIServer) FetchData(url string, decodeFunc func(io.Reader) error) error {
-	r, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to fetch data from %s: %v", url, err)
-	}
-	defer func(Body io.ReadCloser) {
-		if err := Body.Close(); err != nil {
-			log.Println("failed to close response body:", err)
-		}
-	}(r.Body)
-
-	if err := decodeFunc(r.Body); err != nil {
-		return fmt.Errorf("failed to decode or process data from %s: %v", url, err)
-	}
-
-	log.Printf("Successfully processed data from %s.", url)
-	return nil
-}
-
 func (s *APIServer) FetchAndInsertLigeDataToDB(url string) error {
 
 	decodeFunc := func(body io.Reader) error {
@@ -164,7 +144,7 @@ func (s *APIServer) FetchAndInsertLigeDataToDB(url string) error {
 
 		return nil
 	}
-	return s.FetchData(url, decodeFunc)
+	return client.ProcessData(url, decodeFunc)
 }
 
 func (s *APIServer) FetchAndInsertPonudeDataToDB(url string) error {
@@ -190,11 +170,11 @@ func (s *APIServer) FetchAndInsertPonudeDataToDB(url string) error {
 		log.Println("Successfully updated Ponude data.")
 		return nil
 	}
-	return s.FetchData(url, decodeFunc)
+	return client.ProcessData(url, decodeFunc)
 }
 
 func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error {
-	lige, err := s.get.GetLige()
+	lige, err := s.store.GetLige()
 
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get lige: %v", err)}
@@ -241,7 +221,7 @@ func (s *APIServer) handleCreatePlayer(w http.ResponseWriter, r *http.Request) e
 }
 
 func (s *APIServer) handleGetPlayers(w http.ResponseWriter, _ *http.Request) error {
-	player, err := s.get.GetPlayers()
+	player, err := s.store.GetPlayers()
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get players: %v", err)}
 	}
@@ -278,7 +258,7 @@ func (s *APIServer) handleGetPlayerByID(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return &shared.UserError{Message: fmt.Sprintf("invalid player id: %v", err)}
 	}
-	player, err := s.get.GetPlayerByID(id)
+	player, err := s.store.GetPlayerByID(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("Player with ID %d not found: %v", id, err)}
@@ -294,7 +274,7 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return &shared.UserError{Message: fmt.Sprintf("failed to decode login data: %v", err)}
 	}
 
-	player, err := s.get.GetLogin(loginReq.Username)
+	player, err := s.store.GetLogin(loginReq.Username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("Player with username %s not found", loginReq.Username)}
@@ -314,7 +294,7 @@ func (s *APIServer) handleGetPonuda(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return &shared.UserError{Message: fmt.Sprintf("invalid ponuda id: %v", err)}
 	}
-	ponuda, err := s.get.GetPonuda(id)
+	ponuda, err := s.store.GetPonuda(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return &shared.UserError{Message: fmt.Sprintf("ponuda with id %d not found", id)}
@@ -379,7 +359,7 @@ func (s *APIServer) handleDeposit(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *APIServer) handeGetAllPonude(w http.ResponseWriter, _ *http.Request) error {
-	ponude, err := s.get.GetAllPonude()
+	ponude, err := s.store.GetAllPonude()
 	if err != nil {
 		return &shared.InternalError{Message: fmt.Sprintf("failed to get ponude: %v", err)}
 	}
