@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -15,7 +16,7 @@ func FetchData(url string) (io.ReadCloser, error) {
 	return r.Body, nil
 }
 
-func ProcessData(url string, decodeFunc func(io.Reader) error) error {
+func ProcessData(url string, out interface{}) error {
 	resp, err := FetchData(url)
 	if err != nil {
 		return err
@@ -26,7 +27,7 @@ func ProcessData(url string, decodeFunc func(io.Reader) error) error {
 		}
 	}(resp)
 
-	if err := decodeFunc(resp); err != nil {
+	if err := json.NewDecoder(resp).Decode(out); err != nil {
 		return fmt.Errorf("failed to decode or process data from %s: %v", url, err)
 	}
 

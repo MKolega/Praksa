@@ -8,7 +8,6 @@ import (
 	"github.com/MKolega/Praksa/internal/client"
 	"github.com/MKolega/Praksa/internal/shared"
 	"github.com/gorilla/mux"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -111,66 +110,65 @@ func makeHTTPHandlefunc(handlerFunc func(w http.ResponseWriter, r *http.Request)
 
 func (s *APIServer) FetchAndInsertLigeDataToDB(url string) error {
 
-	decodeFunc := func(body io.Reader) error {
-		var jsonData shared.JsonData
-		if err := json.NewDecoder(body).Decode(&jsonData); err != nil {
-			return fmt.Errorf("failed to decode Lige JSON: %v", err)
+	var jsonData shared.JsonData
+	err := client.ProcessData(url, &jsonData)
+	if err != nil {
+		return fmt.Errorf("failed to decode Lige JSON: %v", err)
+	}
+
+	for _, liga := range jsonData.Lige {
+		ligaID, err := s.store.CreateLiga(liga.Naziv)
+		if err != nil {
+			log.Printf("failed to insert liga %s: %v", liga.Naziv, err)
+			continue
 		}
 
-		for _, liga := range jsonData.Lige {
-			ligaID, err := s.store.CreateLiga(liga.Naziv)
+		for _, razrada := range liga.Razrade {
+			razradaID, err := s.store.CreateRazrada(ligaID, razrada.Ponude)
 			if err != nil {
-				log.Printf("failed to insert liga %s: %v", liga.Naziv, err)
+				log.Printf("failed to insert razrada for liga %s: %v", liga.Naziv, err)
 				continue
 			}
 
-			for _, razrada := range liga.Razrade {
-				razradaID, err := s.store.CreateRazrada(ligaID, razrada.Ponude)
+			for _, tip := range razrada.Tipovi {
+				err := s.store.CreateTipovi(razradaID, tip.Naziv)
 				if err != nil {
-					log.Printf("failed to insert razrada for liga %s: %v", liga.Naziv, err)
-					continue
-				}
+					log.Printf("failed to insert tip %s for razrada %d: %v", tip.Naziv, razradaID, err)
 
-				for _, tip := range razrada.Tipovi {
-					err := s.store.CreateTipovi(razradaID, tip.Naziv)
-					if err != nil {
-						log.Printf("failed to insert tip %s for razrada %d: %v", tip.Naziv, razradaID, err)
-
-					}
 				}
 			}
 		}
-		log.Println("Successfully updated Lige data.")
-
-		return nil
 	}
-	return client.ProcessData(url, decodeFunc)
+	log.Println("Successfully updated Lige data.")
+
+	return nil
+
 }
 
 func (s *APIServer) FetchAndInsertPonudeDataToDB(url string) error {
-	decodeFunc := func(body io.Reader) error {
-		var jsonData []shared.Ponude
-		if err := json.NewDecoder(body).Decode(&jsonData); err != nil {
-			return fmt.Errorf("failed to decode Ponude JSON: %v", err)
-		}
 
-		for _, ponuda := range jsonData {
-			if err := s.store.CreatePonuda(&ponuda); err != nil {
-				log.Printf("failed to insert ponuda with ID %d: %v", ponuda.ID, err)
-				continue
-			}
-
-			for _, tecaj := range ponuda.Tecajevi {
-				if err := s.store.CreateTecaj(ponuda.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
-					log.Printf("failed to insert tecaj '%s' for ponuda ID %d: %v", tecaj.Naziv, ponuda.ID, err)
-				}
-			}
-		}
-
-		log.Println("Successfully updated Ponude data.")
-		return nil
+	var jsonData []shared.Ponude
+	err := client.ProcessData(url, &jsonData)
+	if err != nil {
+		return fmt.Errorf("failed to decode Ponude JSON: %v", err)
 	}
-	return client.ProcessData(url, decodeFunc)
+
+	for _, ponuda := range jsonData {
+		if err := s.store.CreatePonuda(&ponuda); err != nil {
+			log.Printf("failed to insert ponuda with ID %d: %v", ponuda.ID, err)
+			continue
+		}
+
+		for _, tecaj := range ponuda.Tecajevi {
+			if err := s.store.CreateTecaj(ponuda.ID, tecaj.Tecaj, tecaj.Naziv); err != nil {
+				log.Printf("failed to insert tecaj '%s' for ponuda ID %d: %v", tecaj.Naziv, ponuda.ID, err)
+			}
+		}
+	}
+
+	log.Println("Successfully updated Ponude data.")
+	return nil
+
 }
 
 func (s *APIServer) HandleGetLige(w http.ResponseWriter, _ *http.Request) error {
